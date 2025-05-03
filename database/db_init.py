@@ -64,17 +64,6 @@ class DatabaseInitializer:
                 )
                 """)
                 
-                # 创建消息映射表（用于编辑和删除功能）
-                cursor.execute("""
-                CREATE TABLE IF NOT EXISTS message_mapping (
-                    id INT AUTO_INCREMENT PRIMARY KEY,
-                    group_message_id BIGINT NOT NULL,
-                    forwarded_message_id BIGINT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    UNIQUE KEY unique_mapping (group_message_id, forwarded_message_id)
-                )
-                """)
-                
             connection.commit()
             logger.info("所有数据库表已成功创建")
             connection.close()

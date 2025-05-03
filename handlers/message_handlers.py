@@ -1,5 +1,5 @@
-from telegram import Update, Message, ForceReply
-from telegram.ext import ContextTypes
+from telegram import Update, Message, ForceReply, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ContextTypes, CallbackQueryHandler
 from telegram.constants import ParseMode
 from database.db_operations import UserOperations, TopicOperations, MessageOperations
 from utils.logger import setup_logger
@@ -295,15 +295,68 @@ class MessageHandlers:
                 direction="owner_to_user"
             )
             
-            # 在消息下方添加一个小小的回复标记
-            await message.reply_text("✅ 已转发给用户")
+            # 创建内联键盘按钮
+            keyboard = [
+                [
+                    InlineKeyboardButton("编辑", callback_data=f"edit_{forwarded_msg.message_id}_{user_id}"),
+                    InlineKeyboardButton("删除", callback_data=f"delete_{forwarded_msg.message_id}_{user_id}")
+                ]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            # 在消息下方添加一个小小的回复标记，并带有按钮
+            await message.reply_text(
+                "✅ 已转发给用户",
+                reply_markup=reply_markup
+            )
             
             logger.info(f"已将主人的 {message_type} 消息转发给用户 {user_id}")
             
         except Exception as e:
             logger.error(f"转发消息给用户 {user_id} 时出错: {e}")
             await message.reply_text(f"⚠️ 转发消息失败: {str(e)}")
-            
+    
+    @staticmethod
+    async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """处理按钮回调"""
+        query = update.callback_query
+        await query.answer()  # 回应回调查询
+        
+        # 解析回调数据
+        data = query.data.split("_")
+        action = data[0]
+        message_id = int(data[1])
+        user_id = int(data[2])
+        
+        if action == "delete":
+            try:
+                # 删除发送给用户的消息
+                await context.bot.delete_message(
+                    chat_id=user_id,
+                    message_id=message_id
+                )
+                
+                # 更新按钮文本，表示已删除
+                await query.edit_message_text(
+                    "✅ 消息已删除",
+                    reply_markup=None
+                )
+                
+                logger.info(f"已删除发送给用户 {user_id} 的消息 {message_id}")
+            except Exception as e:
+                logger.error(f"删除消息时出错: {e}")
+                await query.edit_message_text(
+                    f"⚠️ 删除消息失败: {str(e)}",
+                    reply_markup=None
+                )
+        
+        elif action == "edit":
+            # 编辑功能暂不实现
+            await query.edit_message_text(
+                "⚠️ 编辑功能暂未实现",
+                reply_markup=query.message.reply_markup
+            )
+    
     @staticmethod
     def _determine_message_type(message: Message) -> str:
         """确定消息类型"""

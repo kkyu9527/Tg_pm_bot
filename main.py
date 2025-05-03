@@ -2,7 +2,7 @@ import os
 import asyncio
 from dotenv import load_dotenv
 from telegram import Bot, Update
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from database.db_connector import DatabaseConnector
 from database.db_init import DatabaseInitializer
 from handlers.command_handlers import CommandHandlers
@@ -46,6 +46,9 @@ async def main():
         # 添加消息处理程序
         application.add_handler(MessageHandler(filters.ChatType.PRIVATE & ~filters.COMMAND, MessageHandlers.handle_user_message))
         application.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.IS_TOPIC_MESSAGE, MessageHandlers.handle_owner_message))
+        
+        # 添加按钮回调处理程序
+        application.add_handler(CallbackQueryHandler(MessageHandlers.handle_button_callback))
         
         # 启动机器人
         logger.info("启动机器人")
