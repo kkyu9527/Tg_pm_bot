@@ -32,7 +32,7 @@ class CommandHandlers:
         info_message = (
             "ℹ️ 关于私聊转发机器人\n\n"
             "这个机器人可以帮助您向主人发送私信，并接收主人的回复。\n\n"
-            "项目已开源，地址：开源地址\n\n"
+            "项目已开源，地址：https://github.com/kkyu9527/Tg_pm_bot.git\n\n"
             "如有任何问题，请直接向机器人发送消息。"
         )
         
