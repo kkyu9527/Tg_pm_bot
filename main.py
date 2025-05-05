@@ -40,7 +40,7 @@ async def main():
         
         # 创建应用程序，设置连接超时和重试
         # 增加连接超时时间和重试次数
-        application = Application.builder().token(bot_token).connect_timeout(30.0).pool_timeout(30.0).build()
+        application = Application.builder().token(bot_token).connect_timeout(60.0).pool_timeout(60.0).read_timeout(60.0).build()
         
         # 添加命令处理程序
         application.add_handler(CommandHandler("start", CommandHandlers.start_command))
@@ -55,7 +55,7 @@ async def main():
         
         # 启动机器人，添加重试机制
         logger.info("启动机器人")
-        max_retries = 3
+        max_retries = 10
         retry_count = 0
         
         while retry_count < max_retries:
@@ -67,8 +67,13 @@ async def main():
                 break
             except httpx.ConnectTimeout:
                 retry_count += 1
-                wait_time = retry_count * 5  # 递增等待时间
+                wait_time = retry_count * 10
                 logger.warning(f"连接超时，第 {retry_count} 次重试，等待 {wait_time} 秒...")
+                await asyncio.sleep(wait_time)
+            except httpx.ConnectError:
+                retry_count += 1
+                wait_time = retry_count * 10
+                logger.warning(f"连接错误，第 {retry_count} 次重试，等待 {wait_time} 秒...")
                 await asyncio.sleep(wait_time)
             except Exception as e:
                 logger.error(f"启动机器人时出错: {e}")
@@ -81,7 +86,7 @@ async def main():
         
         # 保持机器人运行
         try:
-            await asyncio.Future()  # 无限期运行
+            await asyncio.Future()
         finally:
             # 停止机器人
             await application.updater.stop()

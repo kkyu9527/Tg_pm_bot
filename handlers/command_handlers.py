@@ -28,7 +28,7 @@ class CommandHandlers:
     async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /info 命令"""
         user = update.effective_user
-        logger.info(f"用户 {user.id} ({user.first_name}{user.last_name}) 发送了 /info 命令")
+        logger.info(f"用户 {user.id} ({user.first_name}) 发送了 /info 命令")
         
         info_message = (
             "ℹ️ 关于私聊转发机器人\n\n"
