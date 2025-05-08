@@ -130,8 +130,7 @@ class MessageHandlers:
         try:
             forwarded_msg = await bot.send_message(
                 chat_id=GROUP_ID,
-                message_thread_id=topic_id,
-                text=f"{user_display} 发来了一条 {message_type} 消息。"
+                message_thread_id=topic_id
             )
             
             # 根据消息类型转发实际内容
