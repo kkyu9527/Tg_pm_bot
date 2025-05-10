@@ -130,7 +130,8 @@ class MessageHandlers:
         try:
             forwarded_msg = await bot.send_message(
                 chat_id=GROUP_ID,
-                message_thread_id=topic_id
+                message_thread_id=topic_id,
+                text=f"{user_display} 发来了一条 {message_type} 消息。"
             )
             
             # 根据消息类型转发实际内容
@@ -181,7 +182,6 @@ class MessageHandlers:
                     message_thread_id=topic_id,
                     sticker=message.sticker.file_id
                 )
-            # 可以根据需要添加更多类型的处理
             
             # 保存消息记录到数据库
             msg_ops = MessageOperations()
@@ -198,7 +198,6 @@ class MessageHandlers:
         except BadRequest as e:
             if "Message thread not found" in str(e):
                 logger.error(f"话题 {topic_id} 不存在，尝试重新创建话题失败")
-                # 这里可以添加重试逻辑或通知管理员
             else:
                 # 其他错误，直接抛出
                 raise
@@ -496,11 +495,6 @@ class MessageHandlers:
                 )
                 
                 logger.info(f"已编辑发送给用户 {user_id} 的消息 {message_id}")
-                
-                # 更新数据库中的消息记录（如果需要）
-                # 这里可以添加更新数据库的代码
-                
-                # 处理完编辑请求，直接返回，不继续处理常规消息
                 return
                 
             except Exception as e:
