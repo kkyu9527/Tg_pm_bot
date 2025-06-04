@@ -6,19 +6,15 @@ logger = setup_logger('db_init', 'logs/db_init.log')
 
 class DatabaseInitializer:
     """数据库初始化类"""
-    
+
     def __init__(self, db_connector):
-        """初始化数据库初始化器"""
         self.db_connector = db_connector
-        
+
     def initialize_database(self):
         """初始化数据库和表"""
-        # 首先确保数据库存在
         self.db_connector.create_database()
-        
-        # 创建所需的表
         self.create_tables()
-        
+
     def create_tables(self):
         """创建所需的表"""
         try:
@@ -34,7 +30,7 @@ class DatabaseInitializer:
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
                 """)
-                
+
                 # 创建话题表
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS topics (
@@ -47,14 +43,13 @@ class DatabaseInitializer:
                     UNIQUE KEY unique_topic (topic_id)
                 )
                 """)
-                
+
                 # 创建消息表
                 cursor.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
                     id INT AUTO_INCREMENT PRIMARY KEY,
                     user_id BIGINT NOT NULL,
                     topic_id BIGINT NOT NULL,
-                    message_type VARCHAR(50) NOT NULL,
                     user_message_id BIGINT NOT NULL,
                     group_message_id BIGINT,
                     direction ENUM('user_to_owner', 'owner_to_user') NOT NULL,
@@ -63,11 +58,11 @@ class DatabaseInitializer:
                     FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
                 )
                 """)
-                
+
             connection.commit()
             logger.info("所有数据库表已成功创建")
             connection.close()
-            
+
         except Exception as e:
             logger.error(f"创建表时出错: {e}")
             raise
