@@ -129,7 +129,7 @@ class MessageOperations:
         """初始化数据库连接"""
         self.db_connector = DatabaseConnector()
     
-    def save_message(self, user_id: int, topic_id: int, message_type: str, 
+    def save_message(self, user_id: int, topic_id: int,
                     user_message_id: int, group_message_id: int, direction: str) -> bool:
         """保存消息记录到数据库"""
         try:
@@ -137,12 +137,12 @@ class MessageOperations:
             with connection.cursor() as cursor:
                 cursor.execute(
                     """INSERT INTO messages 
-                    (user_id, topic_id, message_type, user_message_id, group_message_id, direction) 
-                    VALUES (%s, %s, %s, %s, %s, %s)""",
-                    (user_id, topic_id, message_type, user_message_id, group_message_id, direction)
+                    (user_id, topic_id, user_message_id, group_message_id, direction) 
+                    VALUES (%s, %s, %s, %s, %s)""",
+                    (user_id, topic_id, user_message_id, group_message_id, direction)
                 )
                 connection.commit()
-                logger.info(f"消息记录已保存: 用户 {user_id}, 话题 {topic_id}, 类型 {message_type}")
+                logger.info(f"消息记录已保存: 用户 {user_id}, 话题 {topic_id}")
                 return True
         except Exception as e:
             logger.error(f"保存消息记录时出错: {e}")
