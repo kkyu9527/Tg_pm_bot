@@ -121,6 +121,21 @@ class TopicOperations:
             if connection:
                 connection.close()
 
+    def delete_topic(self, topic_id: int) -> bool:
+        try:
+            connection = self.db_connector.get_connection()
+            with connection.cursor() as cursor:
+                cursor.execute("DELETE FROM topics WHERE topic_id = %s", (topic_id,))
+                connection.commit()
+                logger.info(f"话题 {topic_id} 已从数据库中删除")
+                return True
+        except Exception as e:
+            logger.error(f"删除话题时出错: {e}")
+            return False
+        finally:
+            if connection:
+                connection.close()
+
 
 class MessageOperations:
     """消息数据库操作类"""

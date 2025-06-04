@@ -90,12 +90,28 @@ class MessageHandlers:
         topic = topic_ops.get_user_topic(user.id)
         if topic:
             return topic["topic_id"]
+
+        username = f"@{user.username}" if user.username else "无用户名"
         topic_name = f"{user.first_name} {(user.last_name or '')}".strip() + f" (ID: {user.id})"
         forum_topic = await bot.create_forum_topic(chat_id=GROUP_ID, name=topic_name)
         topic_id = forum_topic.message_thread_id
         topic_ops.save_topic(user.id, topic_id, topic_name)
-        await bot.send_message(chat_id=GROUP_ID, message_thread_id=topic_id,
-                               text=f"用户 {topic_name} 开始了新的对话。")
+
+        sent_msg = await bot.send_message(
+            chat_id=GROUP_ID,
+            message_thread_id=topic_id,
+            text=f"用户 {topic_name}\n用户名: {username}\n开始了新的对话。"
+        )
+
+        try:
+            await bot.pin_chat_message(
+                chat_id=GROUP_ID,
+                message_id=sent_msg.message_id,
+                message_thread_id=topic_id
+            )
+        except Exception as e:
+            logger.warning(f"置顶消息失败: {e}")
+
         return topic_id
 
     @staticmethod
@@ -219,3 +235,30 @@ class MessageHandlers:
             logger.info(f"已编辑用户 {user_id} 的消息")
         except Exception as e:
             logger.error(f"编辑失败: {e}")
+    @staticmethod
+    async def handle_owner_delete_topic(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if update.effective_chat.type == "private" or str(update.effective_user.id) != USER_ID:
+            return
+        if not update.message.is_topic_message:
+            return
+
+        message = update.effective_message
+        topic_id = message.message_thread_id
+        bot = context.bot
+
+        topic_ops = TopicOperations()
+        topic = topic_ops.get_topic_by_id(topic_id)
+        if not topic:
+            await message.reply_text("⚠️ 此话题在数据库中不存在")
+            return
+
+        try:
+            await bot.delete_forum_topic(chat_id=GROUP_ID, message_thread_id=topic_id)
+        except Exception as e:
+            logger.warning(f"尝试删除 Telegram 话题失败: {e}")
+
+        try:
+            topic_ops.delete_topic(topic_id)
+            logger.info(f"主人删除了话题 {topic_id}，已从数据库中移除")
+        except Exception as e:
+            logger.error(f"从数据库中删除话题失败: {e}")
