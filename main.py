@@ -48,11 +48,22 @@ async def lifespan(app: FastAPI):
         # 注册处理器
         application.add_handler(CommandHandler("start", CommandHandlers.start_command))
         application.add_handler(CommandHandler("info", CommandHandlers.info_command))
+        application.add_handler(CommandHandler("delete_topic", MessageHandlers.handle_owner_delete_topic))
         application.add_handler(MessageHandler(filters.ChatType.PRIVATE & ~filters.COMMAND, MessageHandlers.handle_user_message))
         application.add_handler(MessageHandler(filters.ChatType.GROUPS & filters.IS_TOPIC_MESSAGE, MessageHandlers.handle_owner_message))
         application.add_handler(CallbackQueryHandler(MessageHandlers.handle_button_callback))
 
         await application.initialize()
+
+        from telegram import BotCommandScopeAllGroupChats, BotCommand
+
+        await application.bot.set_my_commands(
+            commands=[
+                BotCommand("delete_topic", "删除当前话题（仅限主人）")
+            ],
+            scope=BotCommandScopeAllGroupChats()
+        )
+
         await application.start()
         await application.bot.set_webhook(url=webhook_url)
         app.state.application = application
