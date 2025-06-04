@@ -38,8 +38,13 @@ async def main():
             logger.error("未找到 BOT_TOKEN 环境变量")
             raise ValueError("BOT_TOKEN 环境变量未设置")
         
+        # 获取Webhook URL
+        webhook_url = os.getenv('WEBHOOK_URL')
+        if not webhook_url:
+            logger.error("未找到 WEBHOOK_URL 环境变量")
+            raise ValueError("WEBHOOK_URL 环境变量未设置")
+        
         # 创建应用程序，设置连接超时和重试
-        # 增加连接超时时间和重试次数
         application = Application.builder().token(bot_token).connect_timeout(60.0).pool_timeout(60.0).read_timeout(60.0).build()
         
         # 添加命令处理程序
@@ -53,7 +58,7 @@ async def main():
         # 添加按钮回调处理程序
         application.add_handler(CallbackQueryHandler(MessageHandlers.handle_button_callback))
         
-        # 启动机器人，添加重试机制
+        # 启动机器人，使用Webhook而不是轮询
         logger.info("启动机器人")
         max_retries = 10
         retry_count = 0
@@ -62,8 +67,14 @@ async def main():
             try:
                 await application.initialize()
                 await application.start()
-                await application.updater.start_polling()
+                
+                # 设置Webhook
+                await application.bot.set_webhook(url=webhook_url)
+                logger.info(f"成功设置Webhook: {webhook_url}")
+                
+                # 保持程序运行
                 logger.info("机器人启动成功")
+                await asyncio.Future()  # 无限等待，保持程序运行
                 break
             except httpx.ConnectTimeout:
                 retry_count += 1
@@ -84,18 +95,15 @@ async def main():
             print("网络连接失败，请检查您的网络设置或代理配置")
             return
         
-        # 保持机器人运行
-        try:
-            await asyncio.Future()
-        finally:
-            # 停止机器人
-            await application.updater.stop()
-            await application.stop()
-            await application.shutdown()
-        
     except Exception as e:
         logger.error(f"初始化过程中出错: {e}")
         raise
+    finally:
+        # 停止机器人
+        if 'application' in locals():
+            await application.bot.delete_webhook()
+            await application.stop()
+            await application.shutdown()
 
 if __name__ == "__main__":
     try:

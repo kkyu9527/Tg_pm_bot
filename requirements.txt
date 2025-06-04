@@ -1,3 +1,5 @@
 python-telegram-bot
-pymysql
+fastapi
+uvicorn
+httpx
 python-dotenv
