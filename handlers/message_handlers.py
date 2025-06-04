@@ -106,8 +106,7 @@ class MessageHandlers:
         try:
             await bot.pin_chat_message(
                 chat_id=GROUP_ID,
-                message_id=sent_msg.message_id,
-                message_thread_id=topic_id
+                message_id=sent_msg.message_id
             )
         except Exception as e:
             logger.warning(f"置顶消息失败: {e}")
