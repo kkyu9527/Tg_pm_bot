@@ -86,21 +86,25 @@ DB_NAME=Tg_pm_bot
 
 注意：程序会自动创建名为 `Tg_pm_bot` 的数据库和所需的表，无需手动创建。
 
-### 8. 运行机器人
+### 8. 运行机器人（使用 Webhook 模式）
 
-首先激活虚拟环境：
+确保 `.env` 文件中已经正确设置了 `WEBHOOK_URL`，格式为你部署的服务地址，例如：
 
-```bash
-source .venv/bin/activate  # 在 macOS/Linux 上
-# 或
-.venv\Scripts\activate     # 在 Windows 上
+```
+WEBHOOK_URL=https://yourdomain.com/webhook
 ```
 
+然后激活虚拟环境并运行主程序：
+
 ```bash
+source .venv/bin/activate  # macOS/Linux
+# 或
+.venv\Scripts\activate     # Windows
+
 python main.py
 ```
 
-如果一切配置正确，你应该会看到类似以下的日志输出：
+如果配置无误，你将看到类似以下日志输出，表明 webhook 模式已经启动成功：
 
 ```
 INFO - 开始初始化 Telegram 私聊转发机器人
@@ -111,6 +115,7 @@ INFO - 数据库 'Tg_pm_bot' 已创建或已存在
 INFO - 所有数据库表已成功创建
 INFO - 数据库初始化成功
 INFO - 启动机器人
+INFO - 成功设置Webhook: https://yourdomain.com/webhook
 INFO - 机器人启动成功
 ```
 
@@ -163,6 +168,7 @@ Tg_pm_bot/
 3. **机器人无法接收消息**：
    - 确认 BOT_TOKEN 是否正确
    - 检查机器人是否已启动
+   - 确认 Webhook URL 是否能被 Telegram 正确访问，且服务已部署上线
 
 4. **无法转发消息到群组**：
    - 确认 GROUP_ID 是否正确
