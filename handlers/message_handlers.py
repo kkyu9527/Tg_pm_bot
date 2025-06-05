@@ -84,17 +84,46 @@ class MessageHandlers:
         topic_id = forum_topic.message_thread_id
         topic_ops.save_topic(user.id, topic_id, topic_name)
 
-        sent_msg = await bot.send_message(
-            chat_id=GROUP_ID,
-            message_thread_id=topic_id,
-            text=f"用户 {topic_name}\n用户名: {username}\n开始了新的对话。"
+        info_text = (
+            f"👤 <b>新用户开始对话</b>\n"
+            f"╭ 姓名: {user.first_name} {user.last_name or ''}\n"
+            f"├ 用户名: {username}\n"
+            f"├ 用户ID: <code>{user.id}</code>\n"
+            f"├ 语言代码: {user.language_code or '未知'}\n"
+            f"╰ Premium 用户: {'✅' if getattr(user, 'is_premium', False) else '❌'}\n"
         )
 
+        # 发送头像（如有）
         try:
-            await bot.pin_chat_message(
+            photos = await bot.get_user_profile_photos(user.id, limit=1)
+            if photos.total_count > 0:
+                photo_file = photos.photos[0][-1].file_id
+                sent_msg = await bot.send_photo(
+                    chat_id=GROUP_ID,
+                    message_thread_id=topic_id,
+                    photo=photo_file,
+                    caption=info_text,
+                    parse_mode="HTML"
+                )
+            else:
+                sent_msg = await bot.send_message(
+                    chat_id=GROUP_ID,
+                    message_thread_id=topic_id,
+                    text=info_text,
+                    parse_mode="HTML"
+                )
+        except Exception as e:
+            logger.warning(f"获取或发送用户头像失败: {e}")
+            sent_msg = await bot.send_message(
                 chat_id=GROUP_ID,
-                message_id=sent_msg.message_id
+                message_thread_id=topic_id,
+                text=info_text,
+                parse_mode="HTML"
             )
+
+        # 尝试置顶刚刚发送的信息
+        try:
+            await bot.pin_chat_message(chat_id=GROUP_ID, message_id=sent_msg.message_id)
         except Exception as e:
             logger.warning(f"置顶消息失败: {e}")
 
