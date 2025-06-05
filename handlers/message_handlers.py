@@ -236,6 +236,7 @@ class MessageHandlers:
     async def _edit_user_message(bot, new_message, state):
         user_id = state["user_id"]
         old_id = state["message_id"]
+        original_msg = state["original_message"]
         try:
             if new_message.text:
                 await bot.edit_message_text(chat_id=user_id, message_id=old_id, text=new_message.text)
@@ -246,6 +247,18 @@ class MessageHandlers:
                 forwarded = await MessageHandlers._forward_content(new_message, bot, user_id)
                 reply_text = "✅ 已重新发送消息"
                 msg_id = forwarded.message_id
+
+            # 编辑原来的“✏️ 请发送新的消息内容”提示，清除键盘
+            try:
+                await bot.edit_message_text(
+                    chat_id=original_msg.chat_id,
+                    message_id=original_msg.message_id,
+                    text="✏️ 编辑完成",
+                    reply_markup=None
+                )
+            except Exception as e:
+                logger.warning(f"无法清除原消息的键盘: {e}")
+
             await new_message.reply_text(reply_text, reply_markup=build_action_keyboard(msg_id, user_id))
             logger.info(f"已编辑用户 {user_id} 的消息")
         except Exception as e:
