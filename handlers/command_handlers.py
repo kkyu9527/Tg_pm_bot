@@ -9,11 +9,11 @@ class CommandHandlers:
     """处理机器人命令的类"""
     
     @staticmethod
-    async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def start_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
         """处理 /start 命令"""
         user = update.effective_user
         logger.info(f"用户 {user.id} ({user.first_name}) 发送了 /start 命令")
-        
+
         welcome_message = (
             f"👋 您好，{user.first_name}！ID:{user.id} \n\n"
             f"欢迎使用私聊转发机器人。\n"
@@ -21,11 +21,11 @@ class CommandHandlers:
             f"请直接发送您想要传达的消息，可以是文字、图片、视频、语音等任何形式。\n\n"
             f"项目已开源，详情请使用 /info 命令查看。"
         )
-        
+
         await update.message.reply_text(welcome_message)
-    
+
     @staticmethod
-    async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    async def info_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
         """处理 /info 命令"""
         user = update.effective_user
         logger.info(f"用户 {user.id} ({user.first_name}) 发送了 /info 命令")
