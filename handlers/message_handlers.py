@@ -213,9 +213,10 @@ class MessageHandlers:
         await query.answer()
         try:
             data = json.loads(query.data)
-            action = data["action"]
-            message_id = data["message_id"]
-            user_id = data["user_id"]
+            # Support both long and short keys for compatibility
+            action = data.get("action") or data.get("a")
+            message_id = data.get("message_id") or data.get("m")
+            user_id = data.get("user_id") or data.get("u")
         except Exception as e:
             logger.error(f"回调数据解析失败: {e}")
             return
@@ -235,7 +236,33 @@ class MessageHandlers:
                 "original_message": query.message,
                 "timestamp": datetime.utcnow()
             }
-            await query.edit_message_text("✏️ 请发送新的消息内容，将替换之前的消息")
+            # Use compact keys for callback_data to fit within Telegram's 64-byte limit
+            callback_payload = {
+                "a": "cancel_edit",
+                "m": message_id,
+                "u": user_id
+            }
+            keyboard = [[
+                InlineKeyboardButton("取消编辑", callback_data=json.dumps(callback_payload, separators=(',', ':')))
+            ]]
+            await query.edit_message_text(
+                "✏️ 请发送新的消息内容，将替换之前的消息",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+        elif action == "cancel_edit":
+            if query.from_user.id in MessageHandlers.edit_states:
+                state = MessageHandlers.edit_states.pop(query.from_user.id)
+                user_id = state["user_id"]
+                message_id = state["message_id"]
+                keyboard = [[
+                    InlineKeyboardButton("编辑", callback_data=json.dumps({
+                        "action": "edit", "message_id": message_id, "user_id": user_id
+                    })),
+                    InlineKeyboardButton("删除", callback_data=json.dumps({
+                        "action": "delete", "message_id": message_id, "user_id": user_id
+                    }))
+                ]]
+                await query.edit_message_text("❎ 已取消编辑", reply_markup=InlineKeyboardMarkup(keyboard))
 
     @staticmethod
     async def _edit_user_message(bot, new_message, state):
