@@ -1,4 +1,3 @@
-from database.db_connector import DatabaseConnector
 from utils.logger import setup_logger
 
 # 设置日志记录器
@@ -39,7 +38,7 @@ class DatabaseInitializer:
                     topic_id BIGINT NOT NULL,
                     topic_name VARCHAR(255) NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id),
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                     UNIQUE KEY unique_topic (topic_id)
                 )
                 """)
@@ -54,8 +53,8 @@ class DatabaseInitializer:
                     group_message_id BIGINT,
                     direction ENUM('user_to_owner', 'owner_to_user') NOT NULL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    FOREIGN KEY (user_id) REFERENCES users(id),
-                    FOREIGN KEY (topic_id) REFERENCES topics(topic_id)
+                    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                    FOREIGN KEY (topic_id) REFERENCES topics(topic_id) ON DELETE CASCADE
                 )
                 """)
 
