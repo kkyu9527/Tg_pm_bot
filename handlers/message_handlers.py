@@ -12,11 +12,35 @@ from telegram.error import BadRequest, RetryAfter
 from database.db_operations import UserOperations, TopicOperations, MessageOperations
 from utils.logger import setup_logger
 
-# 加载环境变量
 load_dotenv()
 GROUP_ID = os.getenv("GROUP_ID")
 USER_ID = os.getenv("USER_ID")
 logger = setup_logger('messages', 'logs/messages.log')
+
+
+def encode_callback(action, message_id, user_id, compact=False):
+    data = {
+        ("a" if compact else "action"): action,
+        ("m" if compact else "message_id"): message_id,
+        ("u" if compact else "user_id"): user_id
+    }
+    return json.dumps(data, separators=(',', ':') if compact else None)
+
+
+def decode_callback(data):
+    obj = json.loads(data)
+    return {
+        "action": obj.get("action") or obj.get("a"),
+        "message_id": obj.get("message_id") or obj.get("m"),
+        "user_id": obj.get("user_id") or obj.get("u")
+    }
+
+
+def build_action_keyboard(message_id, user_id):
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("编辑", callback_data=encode_callback("edit", message_id, user_id)),
+        InlineKeyboardButton("删除", callback_data=encode_callback("delete", message_id, user_id))
+    ]])
 
 
 class MessageHandlers:
@@ -27,10 +51,10 @@ class MessageHandlers:
     def _cleanup_edit_states():
         now = datetime.utcnow()
         timeout = timedelta(minutes=5)
-        to_remove = [uid for uid, state in MessageHandlers.edit_states.items()
-                     if now - state['timestamp'] > timeout]
-        for uid in to_remove:
-            del MessageHandlers.edit_states[uid]
+        MessageHandlers.edit_states = {
+            uid: state for uid, state in MessageHandlers.edit_states.items()
+            if now - state['timestamp'] <= timeout
+        }
 
     @staticmethod
     async def _forward_content(message: Message, bot, chat_id: int, thread_id: int = None):
@@ -43,7 +67,7 @@ class MessageHandlers:
             logger.error(f"消息转发失败: {e}")
 
     @staticmethod
-    async def _flush_media_group_after_delay(key: str, user, topic_id: int, context):
+    async def _flush_media_group_after_delay(key, user, topic_id, context):
         await asyncio.sleep(2.0)
         messages = MessageHandlers.media_group_cache.pop(key, [])
         if not messages:
@@ -59,14 +83,10 @@ class MessageHandlers:
         try:
             sent_group = await bot.send_media_group(chat_id=GROUP_ID, message_thread_id=topic_id, media=media_group)
             MessageOperations().save_message(
-                user_id=user.id,
-                topic_id=topic_id,
-                user_message_id=messages[0].message_id,
-                group_message_id=sent_group[0].message_id,
-                direction="user_to_owner"
+                user.id, topic_id, messages[0].message_id, sent_group[0].message_id, "user_to_owner"
             )
         except RetryAfter as e:
-            logger.warning(f"限流：等待 {e.retry_after} 秒重试发送媒体组")
+            logger.warning(f"限流：等待 {e.retry_after} 秒")
             await asyncio.sleep(e.retry_after + 1)
             return await MessageHandlers._flush_media_group_after_delay(key, user, topic_id, context)
         except Exception as e:
@@ -78,10 +98,9 @@ class MessageHandlers:
         if topic:
             return topic["topic_id"]
 
-        username = f"@{user.username}" if user.username else "无用户名"
         topic_name = f"{user.first_name} {(user.last_name or '')}".strip() + f" (ID: {user.id})"
-        forum_topic = await bot.create_forum_topic(chat_id=GROUP_ID, name=topic_name)
-        topic_id = forum_topic.message_thread_id
+        username = f"@{user.username}" if user.username else "无用户名"
+        topic_id = (await bot.create_forum_topic(chat_id=GROUP_ID, name=topic_name)).message_thread_id
         topic_ops.save_topic(user.id, topic_id, topic_name)
 
         info_text = (
@@ -93,39 +112,20 @@ class MessageHandlers:
             f"╰ Premium 用户: {'✅' if getattr(user, 'is_premium', False) else '❌'}\n"
         )
 
-        # 发送头像（如有）
         try:
             photos = await bot.get_user_profile_photos(user.id, limit=1)
             if photos.total_count > 0:
-                photo_file = photos.photos[0][-1].file_id
-                sent_msg = await bot.send_photo(
-                    chat_id=GROUP_ID,
-                    message_thread_id=topic_id,
-                    photo=photo_file,
-                    caption=info_text,
-                    parse_mode="HTML"
-                )
+                sent_msg = await bot.send_photo(GROUP_ID, photo=photos.photos[0][-1].file_id,
+                                                message_thread_id=topic_id, caption=info_text, parse_mode="HTML")
             else:
-                sent_msg = await bot.send_message(
-                    chat_id=GROUP_ID,
-                    message_thread_id=topic_id,
-                    text=info_text,
-                    parse_mode="HTML"
-                )
-        except Exception as e:
-            logger.warning(f"获取或发送用户头像失败: {e}")
-            sent_msg = await bot.send_message(
-                chat_id=GROUP_ID,
-                message_thread_id=topic_id,
-                text=info_text,
-                parse_mode="HTML"
-            )
+                raise Exception("无头像")
+        except Exception:
+            sent_msg = await bot.send_message(GROUP_ID, text=info_text, message_thread_id=topic_id, parse_mode="HTML")
 
-        # 尝试置顶刚刚发送的信息
         try:
             await bot.pin_chat_message(chat_id=GROUP_ID, message_id=sent_msg.message_id)
         except Exception as e:
-            logger.warning(f"置顶消息失败: {e}")
+            logger.warning(f"置顶失败: {e}")
 
         return topic_id
 
@@ -137,34 +137,28 @@ class MessageHandlers:
         user = update.effective_user
         message = update.effective_message
         bot = context.bot
-        logger.info(f"收到用户 {user.id} ({user.first_name}) 的消息")
 
         UserOperations().save_user(user.id, user.first_name, user.last_name, user.username)
-        topic_ops = TopicOperations()
-        topic_id = await MessageHandlers._ensure_topic(bot, user, topic_ops)
+        topic_id = await MessageHandlers._ensure_topic(bot, user, TopicOperations())
 
         if message.media_group_id and (message.photo or message.video):
             key = f"{user.id}:{message.media_group_id}"
-            if key not in MessageHandlers.media_group_cache:
-                MessageHandlers.media_group_cache[key] = []
-                asyncio.create_task(
-                    MessageHandlers._flush_media_group_after_delay(key, user, topic_id, context)
-                )
-            MessageHandlers.media_group_cache[key].append(message)
+            MessageHandlers.media_group_cache.setdefault(key, []).append(message)
+            if len(MessageHandlers.media_group_cache[key]) == 1:
+                asyncio.create_task(MessageHandlers._flush_media_group_after_delay(key, user, topic_id, context))
             return
 
         try:
-            forwarded_msg = await MessageHandlers._forward_content(message, bot, GROUP_ID, topic_id)
+            forwarded = await MessageHandlers._forward_content(message, bot, GROUP_ID, topic_id)
             MessageOperations().save_message(user.id, topic_id, message.message_id,
-                                             forwarded_msg.message_id, "user_to_owner")
+                                             forwarded.message_id, "user_to_owner")
         except BadRequest as e:
             if "Message thread not found" in str(e):
-                logger.warning(f"话题 {topic_id} 不存在，重新创建")
-                topic_ops.delete_topic(topic_id)
-                new_topic_id = await MessageHandlers._ensure_topic(bot, user, topic_ops)
-                forwarded_msg = await MessageHandlers._forward_content(message, bot, GROUP_ID, new_topic_id)
-                MessageOperations().save_message(user.id, new_topic_id, message.message_id,
-                                                 forwarded_msg.message_id, "user_to_owner")
+                TopicOperations().delete_topic(topic_id)
+                topic_id = await MessageHandlers._ensure_topic(bot, user, TopicOperations())
+                forwarded = await MessageHandlers._forward_content(message, bot, GROUP_ID, topic_id)
+                MessageOperations().save_message(user.id, topic_id, message.message_id,
+                                                 forwarded.message_id, "user_to_owner")
             else:
                 logger.error(f"转发失败: {e}")
 
@@ -173,38 +167,31 @@ class MessageHandlers:
         MessageHandlers._cleanup_edit_states()
         if update.effective_chat.type == "private" or str(update.effective_user.id) != USER_ID:
             return
+
         if update.effective_user.id in MessageHandlers.edit_states:
-            edit_state = MessageHandlers.edit_states.pop(update.effective_user.id)
-            await MessageHandlers._edit_user_message(context.bot, update.effective_message, edit_state)
-            return
-        if not update.message.is_topic_message:
+            state = MessageHandlers.edit_states.pop(update.effective_user.id)
+            await MessageHandlers._edit_user_message(context.bot, update.effective_message, state)
             return
 
         message = update.effective_message
-        topic_id = message.message_thread_id
-        logger.info(f"收到主人在话题 {topic_id} 中的消息")
-        topic = TopicOperations().get_topic_by_id(topic_id)
+        if not message.is_topic_message:
+            return
+
+        topic = TopicOperations().get_topic_by_id(message.message_thread_id)
         if not topic:
             await message.reply_text("⚠️ 无法找到此话题对应的用户")
             return
+
         user_id = topic["user_id"]
-        bot = context.bot
         try:
-            forwarded_msg = await MessageHandlers._forward_content(message, bot, user_id)
-            MessageOperations().save_message(user_id, topic_id, forwarded_msg.message_id,
+            forwarded = await MessageHandlers._forward_content(message, context.bot, user_id)
+            MessageOperations().save_message(user_id, message.message_thread_id, forwarded.message_id,
                                              message.message_id, "owner_to_user")
-            keyboard = [[
-                InlineKeyboardButton("编辑", callback_data=json.dumps({
-                    "action": "edit", "message_id": forwarded_msg.message_id, "user_id": user_id
-                })),
-                InlineKeyboardButton("删除", callback_data=json.dumps({
-                    "action": "delete", "message_id": forwarded_msg.message_id, "user_id": user_id
-                }))
-            ]]
-            await message.reply_text("✅ 已转发给用户", reply_markup=InlineKeyboardMarkup(keyboard))
+            await message.reply_text("✅ 已转发给用户",
+                                     reply_markup=build_action_keyboard(forwarded.message_id, user_id))
         except Exception as e:
             logger.error(f"转发失败: {e}")
-            await message.reply_text(f"⚠️ 转发失败: {str(e)}")
+            await message.reply_text(f"⚠️ 转发失败: {e}")
 
     @staticmethod
     async def handle_button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -212,23 +199,21 @@ class MessageHandlers:
         query = update.callback_query
         await query.answer()
         try:
-            data = json.loads(query.data)
-            # Support both long and short keys for compatibility
-            action = data.get("action") or data.get("a")
-            message_id = data.get("message_id") or data.get("m")
-            user_id = data.get("user_id") or data.get("u")
+            data = decode_callback(query.data)
         except Exception as e:
             logger.error(f"回调数据解析失败: {e}")
             return
+
+        action = data["action"]
+        message_id = data["message_id"]
+        user_id = data["user_id"]
 
         if action == "delete":
             try:
                 await context.bot.delete_message(chat_id=user_id, message_id=message_id)
                 await query.edit_message_text("✅ 消息已删除")
-                logger.info(f"删除用户 {user_id} 的消息 {message_id}")
             except Exception as e:
-                logger.error(f"删除失败: {e}")
-                await query.edit_message_text(f"⚠️ 删除失败: {str(e)}")
+                await query.edit_message_text(f"⚠️ 删除失败: {e}")
         elif action == "edit":
             MessageHandlers.edit_states[query.from_user.id] = {
                 "message_id": message_id,
@@ -236,76 +221,36 @@ class MessageHandlers:
                 "original_message": query.message,
                 "timestamp": datetime.utcnow()
             }
-            # Use compact keys for callback_data to fit within Telegram's 64-byte limit
-            callback_payload = {
-                "a": "cancel_edit",
-                "m": message_id,
-                "u": user_id
-            }
-            keyboard = [[
-                InlineKeyboardButton("取消编辑", callback_data=json.dumps(callback_payload, separators=(',', ':')))
+            cancel_keyboard = [[
+                InlineKeyboardButton("取消编辑", callback_data=encode_callback("cancel_edit", message_id, user_id, compact=True))
             ]]
-            await query.edit_message_text(
-                "✏️ 请发送新的消息内容，将替换之前的消息",
-                reply_markup=InlineKeyboardMarkup(keyboard)
-            )
+            await query.edit_message_text("✏️ 请发送新的消息内容，将替换之前的消息",
+                                          reply_markup=InlineKeyboardMarkup(cancel_keyboard))
         elif action == "cancel_edit":
             if query.from_user.id in MessageHandlers.edit_states:
                 state = MessageHandlers.edit_states.pop(query.from_user.id)
-                user_id = state["user_id"]
-                message_id = state["message_id"]
-                keyboard = [[
-                    InlineKeyboardButton("编辑", callback_data=json.dumps({
-                        "action": "edit", "message_id": message_id, "user_id": user_id
-                    })),
-                    InlineKeyboardButton("删除", callback_data=json.dumps({
-                        "action": "delete", "message_id": message_id, "user_id": user_id
-                    }))
-                ]]
-                await query.edit_message_text("❎ 已取消编辑", reply_markup=InlineKeyboardMarkup(keyboard))
+                await query.edit_message_text("❎ 已取消编辑",
+                                              reply_markup=build_action_keyboard(state["message_id"], state["user_id"]))
 
     @staticmethod
     async def _edit_user_message(bot, new_message, state):
+        user_id = state["user_id"]
+        old_id = state["message_id"]
         try:
-            user_id = state["user_id"]
-            message_id = state["message_id"]
-
             if new_message.text:
-                await bot.edit_message_text(
-                    chat_id=user_id,
-                    message_id=message_id,
-                    text=new_message.text
-                )
-
-                keyboard = [[
-                    InlineKeyboardButton("编辑", callback_data=json.dumps({
-                        "action": "edit", "message_id": message_id, "user_id": user_id
-                    })),
-                    InlineKeyboardButton("删除", callback_data=json.dumps({
-                        "action": "delete", "message_id": message_id, "user_id": user_id
-                    }))
-                ]]
-                await new_message.reply_text("✅ 已更新用户消息", reply_markup=InlineKeyboardMarkup(keyboard))
-
+                await bot.edit_message_text(chat_id=user_id, message_id=old_id, text=new_message.text)
+                reply_text = "✅ 已更新用户消息"
+                msg_id = old_id
             else:
-                # 非文本消息重发
-                await bot.delete_message(chat_id=user_id, message_id=message_id)
-                new_forward = await MessageHandlers._forward_content(new_message, bot, user_id)
-
-                keyboard = [[
-                    InlineKeyboardButton("编辑", callback_data=json.dumps({
-                        "action": "edit", "message_id": new_forward.message_id, "user_id": user_id
-                    })),
-                    InlineKeyboardButton("删除", callback_data=json.dumps({
-                        "action": "delete", "message_id": new_forward.message_id, "user_id": user_id
-                    }))
-                ]]
-                await new_message.reply_text("✅ 已重新发送消息", reply_markup=InlineKeyboardMarkup(keyboard))
-
+                await bot.delete_message(chat_id=user_id, message_id=old_id)
+                forwarded = await MessageHandlers._forward_content(new_message, bot, user_id)
+                reply_text = "✅ 已重新发送消息"
+                msg_id = forwarded.message_id
+            await new_message.reply_text(reply_text, reply_markup=build_action_keyboard(msg_id, user_id))
             logger.info(f"已编辑用户 {user_id} 的消息")
-
         except Exception as e:
             logger.error(f"编辑失败: {e}")
+
     @staticmethod
     async def handle_owner_delete_topic(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_chat.type == "private" or str(update.effective_user.id) != USER_ID:
@@ -313,23 +258,17 @@ class MessageHandlers:
         if not update.message.is_topic_message:
             return
 
-        message = update.effective_message
-        topic_id = message.message_thread_id
-        bot = context.bot
-
-        topic_ops = TopicOperations()
-        topic = topic_ops.get_topic_by_id(topic_id)
-        if not topic:
-            await message.reply_text("⚠️ 此话题在数据库中不存在")
+        topic_id = update.effective_message.message_thread_id
+        if not TopicOperations().get_topic_by_id(topic_id):
+            await update.effective_message.reply_text("⚠️ 此话题在数据库中不存在")
             return
 
         try:
-            await bot.delete_forum_topic(chat_id=GROUP_ID, message_thread_id=topic_id)
+            await context.bot.delete_forum_topic(chat_id=GROUP_ID, message_thread_id=topic_id)
         except Exception as e:
-            logger.warning(f"尝试删除 Telegram 话题失败: {e}")
-
+            logger.warning(f"Telegram 话题删除失败: {e}")
         try:
-            topic_ops.delete_topic(topic_id)
-            logger.info(f"主人删除了话题 {topic_id}，已从数据库中移除")
+            TopicOperations().delete_topic(topic_id)
+            logger.info(f"主人删除了话题 {topic_id}")
         except Exception as e:
             logger.error(f"从数据库中删除话题失败: {e}")
