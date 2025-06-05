@@ -1,20 +1,21 @@
 from database.db_connector import DatabaseConnector
 from utils.logger import setup_logger
-from typing import Dict, Optional, List, Any
-import pymysql
+from typing import Dict, Optional, Any
+import pymysql.cursors
 
 # 设置日志记录器
 logger = setup_logger('db_operations', 'logs/db_operations.log')
 
 class UserOperations:
     """用户数据库操作类"""
-    
+
     def __init__(self):
         """初始化数据库连接"""
         self.db_connector = DatabaseConnector()
-    
+
     def save_user(self, user_id: int, first_name: str, last_name: Optional[str] = None, username: Optional[str] = None) -> bool:
         """保存用户信息到数据库"""
+        connection = None
         try:
             connection = self.db_connector.get_connection()
             with connection.cursor() as cursor:
@@ -41,9 +42,10 @@ class UserOperations:
         finally:
             if connection:
                 connection.close()
-    
+
     def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
         """获取用户信息"""
+        connection = None
         try:
             connection = self.db_connector.get_connection()
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
@@ -59,13 +61,14 @@ class UserOperations:
 
 class TopicOperations:
     """话题数据库操作类"""
-    
+
     def __init__(self):
         """初始化数据库连接"""
         self.db_connector = DatabaseConnector()
-    
+
     def save_topic(self, user_id: int, topic_id: int, topic_name: str) -> bool:
         """保存话题信息到数据库"""
+        connection = None
         try:
             connection = self.db_connector.get_connection()
             with connection.cursor() as cursor:
@@ -92,9 +95,10 @@ class TopicOperations:
         finally:
             if connection:
                 connection.close()
-    
+
     def get_user_topic(self, user_id: int) -> Optional[Dict[str, Any]]:
         """获取用户的话题信息"""
+        connection = None
         try:
             connection = self.db_connector.get_connection()
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
@@ -106,9 +110,10 @@ class TopicOperations:
         finally:
             if connection:
                 connection.close()
-    
+
     def get_topic_by_id(self, topic_id: int) -> Optional[Dict[str, Any]]:
         """通过话题ID获取话题信息"""
+        connection = None
         try:
             connection = self.db_connector.get_connection()
             with connection.cursor(pymysql.cursors.DictCursor) as cursor:
@@ -122,12 +127,14 @@ class TopicOperations:
                 connection.close()
 
     def delete_topic(self, topic_id: int) -> bool:
+        connection = None
         try:
             connection = self.db_connector.get_connection()
             with connection.cursor() as cursor:
+                # 再删除话题本身
                 cursor.execute("DELETE FROM topics WHERE topic_id = %s", (topic_id,))
                 connection.commit()
-                logger.info(f"话题 {topic_id} 已从数据库中删除")
+                logger.info(f"话题 {topic_id} 及其相关消息已从数据库中删除")
                 return True
         except Exception as e:
             logger.error(f"删除话题时出错: {e}")
@@ -139,14 +146,15 @@ class TopicOperations:
 
 class MessageOperations:
     """消息数据库操作类"""
-    
+
     def __init__(self):
         """初始化数据库连接"""
         self.db_connector = DatabaseConnector()
-    
+
     def save_message(self, user_id: int, topic_id: int,
                     user_message_id: int, group_message_id: int, direction: str) -> bool:
         """保存消息记录到数据库"""
+        connection = None
         try:
             connection = self.db_connector.get_connection()
             with connection.cursor() as cursor:
@@ -161,25 +169,6 @@ class MessageOperations:
                 return True
         except Exception as e:
             logger.error(f"保存消息记录时出错: {e}")
-            return False
-        finally:
-            if connection:
-                connection.close()
-    
-    def save_message_mapping(self, group_message_id: int, forwarded_message_id: int) -> bool:
-        """保存消息映射关系"""
-        try:
-            connection = self.db_connector.get_connection()
-            with connection.cursor() as cursor:
-                cursor.execute(
-                    "INSERT INTO message_mapping (group_message_id, forwarded_message_id) VALUES (%s, %s)",
-                    (group_message_id, forwarded_message_id)
-                )
-                connection.commit()
-                logger.info(f"消息映射已保存: 群组消息 {group_message_id}, 转发消息 {forwarded_message_id}")
-                return True
-        except Exception as e:
-            logger.error(f"保存消息映射时出错: {e}")
             return False
         finally:
             if connection:
