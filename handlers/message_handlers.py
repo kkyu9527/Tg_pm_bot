@@ -213,12 +213,41 @@ class MessageHandlers:
         try:
             user_id = state["user_id"]
             message_id = state["message_id"]
+
             if new_message.text:
-                await bot.edit_message_text(chat_id=user_id, message_id=message_id, text=new_message.text)
+                await bot.edit_message_text(
+                    chat_id=user_id,
+                    message_id=message_id,
+                    text=new_message.text
+                )
+
+                keyboard = [[
+                    InlineKeyboardButton("编辑", callback_data=json.dumps({
+                        "action": "edit", "message_id": message_id, "user_id": user_id
+                    })),
+                    InlineKeyboardButton("删除", callback_data=json.dumps({
+                        "action": "delete", "message_id": message_id, "user_id": user_id
+                    }))
+                ]]
+                await new_message.reply_text("✅ 已更新用户消息", reply_markup=InlineKeyboardMarkup(keyboard))
+
             else:
+                # 非文本消息重发
                 await bot.delete_message(chat_id=user_id, message_id=message_id)
-                await MessageHandlers._forward_content(new_message, bot, user_id)
+                new_forward = await MessageHandlers._forward_content(new_message, bot, user_id)
+
+                keyboard = [[
+                    InlineKeyboardButton("编辑", callback_data=json.dumps({
+                        "action": "edit", "message_id": new_forward.message_id, "user_id": user_id
+                    })),
+                    InlineKeyboardButton("删除", callback_data=json.dumps({
+                        "action": "delete", "message_id": new_forward.message_id, "user_id": user_id
+                    }))
+                ]]
+                await new_message.reply_text("✅ 已重新发送消息", reply_markup=InlineKeyboardMarkup(keyboard))
+
             logger.info(f"已编辑用户 {user_id} 的消息")
+
         except Exception as e:
             logger.error(f"编辑失败: {e}")
     @staticmethod
