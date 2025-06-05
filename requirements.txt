@@ -1,6 +1,7 @@
-python-telegram-bot
-fastapi
-uvicorn
-httpx
-python-dotenv
-pymysql
+# 核心依赖
+python-telegram-bot==22.0
+fastapi==0.115.1
+uvicorn==0.34.3
+httpx==0.28.1
+python-dotenv==1.1.0
+PyMySQL==1.1.1
