@@ -35,23 +35,10 @@ class MessageHandlers:
     @staticmethod
     async def _forward_content(message: Message, bot, chat_id: int, thread_id: int = None):
         try:
-            kwargs = {"chat_id": chat_id}
+            kwargs = {"chat_id": chat_id, "from_chat_id": message.chat_id, "message_id": message.message_id}
             if thread_id:
                 kwargs["message_thread_id"] = thread_id
-            if message.text:
-                return await bot.send_message(**kwargs, text=message.text)
-            elif message.photo:
-                return await bot.send_photo(**kwargs, photo=message.photo[-1].file_id, caption=message.caption)
-            elif message.video:
-                return await bot.send_video(**kwargs, video=message.video.file_id, caption=message.caption)
-            elif message.voice:
-                return await bot.send_voice(**kwargs, voice=message.voice.file_id, caption=message.caption)
-            elif message.audio:
-                return await bot.send_audio(**kwargs, audio=message.audio.file_id, caption=message.caption)
-            elif message.document:
-                return await bot.send_document(**kwargs, document=message.document.file_id, caption=message.caption)
-            elif message.sticker:
-                return await bot.send_sticker(**kwargs, sticker=message.sticker.file_id)
+            return await bot.copy_message(**kwargs)
         except Exception as e:
             logger.error(f"消息转发失败: {e}")
 
