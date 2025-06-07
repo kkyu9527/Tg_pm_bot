@@ -36,16 +36,38 @@ def decode_callback(data):
     }
 
 
-def build_action_keyboard(message_id, user_id):
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("编辑", callback_data=encode_callback("edit", message_id, user_id)),
-        InlineKeyboardButton("删除", callback_data=encode_callback("delete", message_id, user_id))
-    ]])
-
-
 class MessageHandlers:
+    ACTION_EDIT = "edit"
+    ACTION_DELETE = "delete"
+    ACTION_CANCEL_EDIT = "cancel_edit"
+
+    TEXT_EDIT_PROMPT = "✏️ 请发送新的消息内容，将替换之前的消息"
+    TEXT_EDIT_DONE = "✏️ 编辑完成"
+    TEXT_EDIT_CANCELLED = "❎ 已取消编辑"
+    TEXT_MSG_DELETED = "✅ 消息已删除"
+    TEXT_MSG_UPDATED = "✅ 已更新用户消息"
+    TEXT_MSG_RESENT = "✅ 已重新发送消息"
+
     edit_states = {}
     media_group_cache = {}
+
+    @staticmethod
+    def build_cancel_edit_keyboard(message_id, user_id):
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("取消编辑", callback_data=encode_callback(
+                MessageHandlers.ACTION_CANCEL_EDIT, message_id, user_id, compact=True))
+        ]])
+
+    @staticmethod
+    def build_action_keyboard(message_id, user_id):
+        return InlineKeyboardMarkup([[
+            InlineKeyboardButton("编辑", callback_data=encode_callback(MessageHandlers.ACTION_EDIT, message_id, user_id)),
+            InlineKeyboardButton("删除", callback_data=encode_callback(MessageHandlers.ACTION_DELETE, message_id, user_id))
+        ]])
+
+    @staticmethod
+    def build_edit_done_keyboard():
+        return InlineKeyboardMarkup([])
 
     @staticmethod
     def _cleanup_edit_states():
@@ -58,13 +80,17 @@ class MessageHandlers:
 
     @staticmethod
     async def _forward_content(message: Message, bot, chat_id: int, thread_id: int = None):
-        try:
-            kwargs = {"chat_id": chat_id, "from_chat_id": message.chat_id, "message_id": message.message_id}
-            if thread_id:
-                kwargs["message_thread_id"] = thread_id
-            return await bot.copy_message(**kwargs)
-        except Exception as e:
-            logger.error(f"消息转发失败: {e}")
+        kwargs = {"chat_id": chat_id, "from_chat_id": message.chat_id, "message_id": message.message_id}
+        if thread_id:
+            kwargs["message_thread_id"] = thread_id
+        for attempt in range(2):
+            try:
+                return await bot.copy_message(**kwargs)
+            except Exception as e:
+                logger.error(f"消息转发失败: {e}")
+                if attempt == 0:
+                    await asyncio.sleep(1)
+        return None
 
     @staticmethod
     async def _flush_media_group_after_delay(key, user, topic_id, context):
@@ -150,6 +176,8 @@ class MessageHandlers:
 
         try:
             forwarded = await MessageHandlers._forward_content(message, bot, GROUP_ID, topic_id)
+            if not forwarded:
+                return
             MessageOperations().save_message(user.id, topic_id, message.message_id,
                                              forwarded.message_id, "user_to_owner")
         except BadRequest as e:
@@ -157,6 +185,8 @@ class MessageHandlers:
                 TopicOperations().delete_topic(topic_id)
                 topic_id = await MessageHandlers._ensure_topic(bot, user, TopicOperations())
                 forwarded = await MessageHandlers._forward_content(message, bot, GROUP_ID, topic_id)
+                if not forwarded:
+                    return
                 MessageOperations().save_message(user.id, topic_id, message.message_id,
                                                  forwarded.message_id, "user_to_owner")
             else:
@@ -185,10 +215,12 @@ class MessageHandlers:
         user_id = topic["user_id"]
         try:
             forwarded = await MessageHandlers._forward_content(message, context.bot, user_id)
+            if not forwarded:
+                return
             MessageOperations().save_message(user_id, message.message_thread_id, forwarded.message_id,
                                              message.message_id, "owner_to_user")
             await message.reply_text("✅ 已转发给用户",
-                                     reply_markup=build_action_keyboard(forwarded.message_id, user_id))
+                                     reply_markup=MessageHandlers.build_action_keyboard(forwarded.message_id, user_id))
         except Exception as e:
             logger.error(f"转发失败: {e}")
             await message.reply_text(f"⚠️ 转发失败: {e}")
@@ -208,29 +240,30 @@ class MessageHandlers:
         message_id = data["message_id"]
         user_id = data["user_id"]
 
-        if action == "delete":
+        if action == MessageHandlers.ACTION_DELETE:
             try:
                 await context.bot.delete_message(chat_id=user_id, message_id=message_id)
-                await query.edit_message_text("✅ 消息已删除")
+                await query.edit_message_text(MessageHandlers.TEXT_MSG_DELETED)
             except Exception as e:
                 await query.edit_message_text(f"⚠️ 删除失败: {e}")
-        elif action == "edit":
+        elif action == MessageHandlers.ACTION_EDIT:
             MessageHandlers.edit_states[query.from_user.id] = {
                 "message_id": message_id,
                 "user_id": user_id,
                 "original_message": query.message,
                 "timestamp": datetime.utcnow()
             }
-            cancel_keyboard = [[
-                InlineKeyboardButton("取消编辑", callback_data=encode_callback("cancel_edit", message_id, user_id, compact=True))
-            ]]
-            await query.edit_message_text("✏️ 请发送新的消息内容，将替换之前的消息",
-                                          reply_markup=InlineKeyboardMarkup(cancel_keyboard))
-        elif action == "cancel_edit":
+            await query.edit_message_text(
+                MessageHandlers.TEXT_EDIT_PROMPT,
+                reply_markup=MessageHandlers.build_cancel_edit_keyboard(message_id, user_id)
+            )
+        elif action == MessageHandlers.ACTION_CANCEL_EDIT:
             if query.from_user.id in MessageHandlers.edit_states:
                 state = MessageHandlers.edit_states.pop(query.from_user.id)
-                await query.edit_message_text("❎ 已取消编辑",
-                                              reply_markup=build_action_keyboard(state["message_id"], state["user_id"]))
+                await query.edit_message_text(
+                    MessageHandlers.TEXT_EDIT_CANCELLED,
+                    reply_markup=MessageHandlers.build_action_keyboard(state["message_id"], state["user_id"])
+                )
 
     @staticmethod
     async def _edit_user_message(bot, new_message, state):
@@ -240,26 +273,27 @@ class MessageHandlers:
         try:
             if new_message.text:
                 await bot.edit_message_text(chat_id=user_id, message_id=old_id, text=new_message.text)
-                reply_text = "✅ 已更新用户消息"
+                reply_text = MessageHandlers.TEXT_MSG_UPDATED
                 msg_id = old_id
             else:
                 await bot.delete_message(chat_id=user_id, message_id=old_id)
                 forwarded = await MessageHandlers._forward_content(new_message, bot, user_id)
-                reply_text = "✅ 已重新发送消息"
+                reply_text = MessageHandlers.TEXT_MSG_RESENT
                 msg_id = forwarded.message_id
 
             # 编辑原来的“✏️ 请发送新的消息内容”提示，清除键盘
             try:
-                await bot.edit_message_text(
-                    chat_id=original_msg.chat_id,
-                    message_id=original_msg.message_id,
-                    text="✏️ 编辑完成",
-                    reply_markup=None
-                )
+                if original_msg and original_msg.chat_id and original_msg.message_id:
+                    await bot.edit_message_text(
+                        chat_id=original_msg.chat_id,
+                        message_id=original_msg.message_id,
+                        text=MessageHandlers.TEXT_EDIT_DONE,
+                        reply_markup=MessageHandlers.build_edit_done_keyboard()
+                    )
             except Exception as e:
                 logger.warning(f"无法清除原消息的键盘: {e}")
 
-            await new_message.reply_text(reply_text, reply_markup=build_action_keyboard(msg_id, user_id))
+            await new_message.reply_text(reply_text, reply_markup=MessageHandlers.build_action_keyboard(msg_id, user_id))
             logger.info(f"已编辑用户 {user_id} 的消息")
         except Exception as e:
             logger.error(f"编辑失败: {e}")
