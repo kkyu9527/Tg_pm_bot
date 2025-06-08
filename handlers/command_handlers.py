@@ -1,3 +1,4 @@
+from database.db_operations import UserOperations
 from telegram import Update
 from telegram.ext import ContextTypes
 from utils.logger import setup_logger
@@ -15,6 +16,8 @@ class CommandHandlers:
         """处理 /start 命令"""
         user = update.effective_user
         logger.info(f"用户 {user.id} ({user.first_name}) 发送了 /start 命令")
+
+        UserOperations().save_user(user.id, user.first_name, user.last_name, user.username)
 
         welcome_message = (
             f"👋 您好，{user.first_name}！\n\n"
