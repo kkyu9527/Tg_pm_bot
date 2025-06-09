@@ -315,7 +315,15 @@ class MessageHandlers:
         except Exception as e:
             logger.warning(f"Telegram 话题删除失败: {e}")
         try:
+            topic = TopicOperations().get_topic_by_id(topic_id)
+            if not topic:
+                await update.effective_message.reply_text("⚠️ 数据库中未找到话题，跳过清理")
+                return
+
+            user_id = topic["user_id"]
+
+            # 删除数据库中的话题和消息记录及用户记录
             TopicOperations().delete_topic(topic_id)
-            logger.info(f"主人删除了话题 {topic_id}")
+            logger.info(f"主人删除了话题 {topic_id} 以及相关数据库记录")
         except Exception as e:
             logger.error(f"从数据库中删除话题失败: {e}")

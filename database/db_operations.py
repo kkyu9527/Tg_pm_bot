@@ -131,10 +131,20 @@ class TopicOperations:
         try:
             connection = self.db_connector.get_connection()
             with connection.cursor() as cursor:
-                # 再删除话题本身
+                # 获取该话题的用户ID
+                cursor.execute("SELECT user_id FROM topics WHERE topic_id = %s", (topic_id,))
+                result = cursor.fetchone()
+                if not result:
+                    logger.warning(f"未找到 topic_id 为 {topic_id} 的话题，跳过删除")
+                    return False
+                user_id = result[0]
+
+                # 删除与该话题相关的记录
+                cursor.execute("DELETE FROM messages WHERE topic_id = %s", (topic_id,))
                 cursor.execute("DELETE FROM topics WHERE topic_id = %s", (topic_id,))
+                cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
                 connection.commit()
-                logger.info(f"话题 {topic_id} 及其相关消息已从数据库中删除")
+                logger.info(f"话题 {topic_id} 及其相关消息与用户数据已从数据库中删除")
                 return True
         except Exception as e:
             logger.error(f"删除话题时出错: {e}")
