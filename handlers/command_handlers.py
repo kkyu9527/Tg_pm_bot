@@ -2,7 +2,7 @@ from database.db_operations import UserOperations
 from telegram import Update
 from telegram.ext import ContextTypes
 from utils.logger import setup_logger
-from handlers.message_handlers import MessageHandlers
+from utils.message_utils import MessageUtils
 from database.db_operations import TopicOperations
 
 # 设置日志记录器
@@ -10,7 +10,7 @@ logger = setup_logger('commands', 'logs/commands.log')
 
 class CommandHandlers:
     """处理机器人命令的类"""
-    
+
     @staticmethod
     async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /start 命令"""
@@ -31,7 +31,7 @@ class CommandHandlers:
         await update.message.reply_text(welcome_message)
 
         # ✅ 创建话题 & 发送欢迎卡片到群组
-        await MessageHandlers._ensure_topic(context.bot, user, TopicOperations())
+        await MessageUtils.ensure_topic(context.bot, user, TopicOperations())
 
     @staticmethod
     async def info_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
