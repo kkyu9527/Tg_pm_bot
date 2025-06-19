@@ -1,0 +1,28 @@
+services:
+  bot:
+    build: .
+    env_file: .env
+    ports:
+      - "9527:9527"
+    depends_on:
+      - mysql
+    volumes:
+      - .:/app
+    restart: always
+
+  mysql:
+    image: mysql:8.0
+    container_name: telegram_mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpass
+      MYSQL_DATABASE: telegram_bot
+      MYSQL_USER: botuser
+      MYSQL_PASSWORD: botpass
+    ports:
+      - "3306:3306"
+    volumes:
+      - ./mysql_backup:/var/lib/mysql
+
+volumes:
+  mysql_data:

@@ -4,12 +4,12 @@
 
 ## 功能特点
 
-- 将用户私聊消息转发到指定群组的话题中
-- 支持文本、图片、视频、语音、音频、文件、贴纸等多种消息类型
-- 自动为每个用户创建独立的话题
-- 管理员可以直接在群组话题中回复用户
-- 支持编辑和删除已发送的消息
-- 消息记录保存到数据库中，方便查询和管理
+* 将用户私聊消息转发到指定群组的话题中
+* 支持文本、图片、视频、语音、音频、文件、贴纸等多种消息类型
+* 自动为每个用户创建独立话题
+* 管理员可以直接在群组话题中回复用户
+* 支持编辑和删除已发送的消息
+* 消息记录保存到数据库中，方便查询和管理
 
 ## 安装步骤
 
@@ -24,48 +24,27 @@ cd Tg_pm_bot
 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate  # 在 Windows 上使用 .venv\Scripts\activate
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
 ### 3. 从 BotFather 获取 Bot Token
 
-1. 在 Telegram 中搜索 [@BotFather](https://t.me/BotFather)
-2. 发送 `/newbot` 命令创建一个新机器人
-3. 按照提示设置机器人名称和用户名
-4. 创建成功后，BotFather 会发送一个 API Token，格式类似于：`123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ`
-5. 保存这个 Token，后续需要用到
-6. **关闭隐私模式**：发送 `/setprivacy` 命令，选择你的机器人，然后选择 `Disable`。这样机器人才能看到群组中的所有消息
+1. 在 Telegram 中搜索 `@BotFather`
+2. 发送 `/newbot` 创建机器人
+3. 复制生成的 API Token
+4. 关闭隐私模式：发送 `/setprivacy`，选择机器人，选择 Disable
 
-### 4. 获取自己的用户 ID
+### 4. 获取用户 ID 和群组 ID
 
-有几种方法可以获取自己的 Telegram 用户 ID：
+* 用户 ID：可通过 `@userinfobot` 获取
+* 群组 ID：打开 Telegram Web 版，进入群组，查看 URL 中的数字部分，格式可能是 `-100xxxxxxxxxx`
 
-**方法一：使用 @userinfobot**
-1. 在 Telegram 中搜索 [@userinfobot](https://t.me/userinfobot)
-2. 向机器人发送任意消息
-3. 机器人会回复你的用户信息，包括用户 ID
+### 5. 创建 `.env` 文件
 
-**方法二：使用 @RawDataBot**
-1. 在 Telegram 中搜索 [@RawDataBot](https://t.me/RawDataBot)
-2. 向机器人发送任意消息
-3. 机器人会回复详细的用户数据，其中包含你的用户 ID
+在项目根目录创建 `.env` 文件，示例内容如下：
 
-### 5. 创建群组并获取群组 ID
-
-1. 在 Telegram 中创建一个新的群组（建议创建超级群组）
-2. 确保启用了话题功能（在群组设置中开启）
-3. 将你创建的机器人添加到群组中，并授予管理员权限
-4. 获取群组 ID 的方法：
-   - 在浏览器中打开 Telegram Web 版
-   - 进入你创建的群组
-   - 查看浏览器地址栏，URL 中的数字部分就是群组 ID，格式可能是 `-100xxxxxxxxxx`
-
-### 6. 创建 .env 文件
-
-在项目根目录创建一个 `.env` 文件，填入以下内容：
-
-```
+```dotenv
 BOT_TOKEN=你的机器人Token
 USER_ID=你的用户ID
 GROUP_ID=你的群组ID
@@ -73,112 +52,74 @@ DB_HOST=localhost
 DB_USER=你的数据库用户名
 DB_PASSWORD=你的数据库密码
 DB_NAME=Tg_pm_bot
-```
-
-注意：
-- `BOT_TOKEN` 是从 BotFather 获取的 Token
-- `USER_ID` 是你的 Telegram 用户 ID
-- `GROUP_ID` 是你创建的群组 ID，包括前面的负号（如果有）
-
-### 7. 配置 MySQL 数据库
-
-确保你的系统已安装 MySQL 数据库，并创建一个用户用于访问数据库。
-
-注意：程序会自动创建名为 `Tg_pm_bot` 的数据库和所需的表，无需手动创建。
-
-### 8. 运行机器人（使用 Webhook 模式）
-
-确保 `.env` 文件中已经正确设置了 `WEBHOOK_URL`，格式为你部署的服务地址，例如：
-
-```
 WEBHOOK_URL=https://yourdomain.com/webhook
 ```
 
-然后激活虚拟环境并运行主程序：
+---
+
+## 使用 Docker 运行（可选）
+
+### 1. 安装 Docker 和 Docker Compose
+
+确保安装并启动 Docker Desktop。
+
+### 2. 配置 `.env` 文件（Docker 模式）
+
+```dotenv
+DB_HOST=mysql
+DB_USER=botuser
+DB_PASSWORD=botpass
+DB_NAME=telegram_bot
+```
+
+### 3. 启动容器
 
 ```bash
-source .venv/bin/activate  # macOS/Linux
-# 或
-.venv\Scripts\activate     # Windows
+docker-compose up --build -d
+```
 
+### 4. 停止容器
+
+```bash
+docker-compose down
+```
+
+---
+
+## 不使用 Docker 运行
+
+激活虚拟环境后运行：
+
+```bash
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python main.py
 ```
 
-如果配置无误，你将看到类似以下日志输出，表明 webhook 模式已经启动成功：
+---
 
-```
-INFO - 开始初始化 Telegram 私聊转发机器人
-INFO - 初始化数据库连接
-INFO - 初始化数据库表
-INFO - 成功连接到MySQL服务器
-INFO - 数据库 'Tg_pm_bot' 已创建或已存在
-INFO - 所有数据库表已成功创建
-INFO - 数据库初始化成功
-INFO - 启动机器人
-INFO - 成功设置Webhook: https://yourdomain.com/webhook
-INFO - 机器人启动成功
-```
+## 使用说明
 
-## 使用方法
+1. 用户私聊机器人发送消息
+2. 机器人转发消息到群组话题
+3. 管理员可在群组话题中回复和管理消息
 
-1. 用户向你的机器人发送私聊消息
-2. 机器人会自动将消息转发到指定群组的话题中
-3. 你可以在群组话题中查看和回复用户消息
-4. 回复时可以使用编辑和删除按钮管理已发送的消息
+---
 
-## 项目结构
+## 常见问题
 
-```
-Tg_pm_bot/
-├── database/               # 数据库相关代码
-│   ├── db_connector.py     # 数据库连接器
-│   ├── db_init.py          # 数据库初始化
-│   └── db_operations.py    # 数据库操作
-├── handlers/               # 消息处理程序
-│   ├── command_handlers.py # 命令处理
-│   └── message_handlers.py # 消息处理
-├── logs/                   # 日志文件目录
-├── utils/                  # 工具函数
-│   └── logger.py           # 日志配置
-├── .env                    # 环境变量配置
-├── main.py                 # 主程序
-└── requirements.txt        # 依赖列表
-```
+* 数据库连接失败：确认数据库服务运行，且 `.env` 配置正确
+* 缺少 `cryptography` 包：运行 `pip install cryptography`
+* 机器人消息不转发：确认 Bot Token、群组 ID 和机器人权限
+* Webhook 无法访问：确认服务器公网可访问，且使用 HTTPS
 
-## 依赖项
-
-主要依赖项包括：
-
-- python-telegram-bot：Telegram 机器人 API 的 Python 封装
-- python-dotenv：用于加载环境变量
-- mysql-connector-python：MySQL 数据库连接器
-
-完整依赖列表请参见 `requirements.txt` 文件。
-
-## 故障排除
-
-1. **连接超时错误**：
-   - 检查网络连接
-   - 如果在中国大陆使用，可能需要配置代理
-
-2. **数据库连接错误**：
-   - 确认 MySQL 服务正在运行
-   - 检查 .env 文件中的数据库凭据是否正确
-
-3. **机器人无法接收消息**：
-   - 确认 BOT_TOKEN 是否正确
-   - 检查机器人是否已启动
-   - 确认 Webhook URL 是否能被 Telegram 正确访问，且服务已部署上线
-
-4. **无法转发消息到群组**：
-   - 确认 GROUP_ID 是否正确
-   - 检查机器人是否已添加到群组并具有管理员权限
-   - 确认群组已启用话题功能
+---
 
 ## 许可证
 
-[MIT License](https://github.com/kkyu9527/Tg_pm_bot/blob/main/LICENSE)
+MIT License
+
+---
 
 ## 项目地址
 
-https://github.com/kkyu9527/Tg_pm_bot.git
+[https://github.com/kkyu9527/Tg\_pm\_bot.git](https://github.com/kkyu9527/Tg_pm_bot.git)

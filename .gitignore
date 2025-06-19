@@ -6,3 +6,5 @@ logs/
 
 # 忽略 idea 目录及其所有内容
 .idea
+
+mysql_backup/
