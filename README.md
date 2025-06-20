@@ -1,5 +1,11 @@
 # Telegram 私聊转发机器人
 
+⚠️ **注意**：由于本项目使用的是 Webhook 模式，**必须使用公网可访问的域名**，且建议使用 **HTTPS**。
+
+项目默认端口为 **9527**，务必确保服务器开启该端口并正确配置反向代理（如 Nginx）。
+
+---
+
 这是一个基于 Python 的 Telegram 机器人，用于将用户私聊消息转发到群组话题中，并允许管理员回复用户消息。
 
 ## 功能特点
@@ -48,7 +54,7 @@ pip install -r requirements.txt
 BOT_TOKEN=你的机器人Token
 USER_ID=你的用户ID
 GROUP_ID=你的群组ID
-DB_HOST=localhost
+DB_HOST=127.0.0.1
 DB_USER=你的数据库用户名
 DB_PASSWORD=你的数据库密码
 DB_NAME=Tg_pm_bot
