@@ -1,6 +1,7 @@
 services:
   bot:
     build: .
+    container_name: telegram_bot
     env_file: .env
     ports:
       - "9527:9527"
@@ -15,14 +16,14 @@ services:
     container_name: telegram_mysql
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: rootpass
-      MYSQL_DATABASE: telegram_bot
-      MYSQL_USER: botuser
-      MYSQL_PASSWORD: botpass
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     ports:
       - "3306:3306"
     volumes:
-      - ./mysql_backup:/var/lib/mysql
+      - mysql_data:/var/lib/mysql
 
 volumes:
   mysql_data:
