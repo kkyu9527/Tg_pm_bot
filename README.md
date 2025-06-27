@@ -122,7 +122,7 @@ python main.py
 
 ## 许可证
 
-MIT License
+[MIT License](https://github.com/kkyu9527/Tg_pm_bot?tab=MIT-1-ov-file)
 
 ---
 
