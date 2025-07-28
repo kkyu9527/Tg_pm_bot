@@ -1,29 +1,28 @@
+# docker-compose.yml
+version: '3.8'
+
 services:
   bot:
-    build: .
+    image: kixyu9527/tg_pm_bot:latest
+    platform: linux/amd64
     container_name: telegram_bot
-    env_file: .env
+    env_file:
+      - 1panel.env
     ports:
       - "9527:9527"
     depends_on:
       - mysql
-    volumes:
-      - .:/app
     restart: always
 
   mysql:
     image: mysql:8.0
+    platform: linux/amd64
     container_name: telegram_mysql
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
-      MYSQL_DATABASE: ${MYSQL_DATABASE}
-      MYSQL_USER: ${MYSQL_USER}
-      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
-    ports:
-      - "3306:3306"
+    env_file:
+      - 1panel.env
     volumes:
       - mysql_data:/var/lib/mysql
+    restart: always
 
 volumes:
   mysql_data:
