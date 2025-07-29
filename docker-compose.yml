@@ -1,28 +1,10 @@
-# docker-compose.yml
-version: '3.8'
-
 services:
   bot:
     image: kixyu9527/tg_pm_bot:latest
-    platform: linux/amd64
     container_name: telegram_bot
+    network_mode: host
     env_file:
       - 1panel.env
-    ports:
-      - "9527:9527"
-    depends_on:
-      - mysql
+    environment:
+      DB_HOST: 127.0.0.1
     restart: always
-
-  mysql:
-    image: mysql:8.0
-    platform: linux/amd64
-    container_name: telegram_mysql
-    env_file:
-      - 1panel.env
-    volumes:
-      - mysql_data:/var/lib/mysql
-    restart: always
-
-volumes:
-  mysql_data:
