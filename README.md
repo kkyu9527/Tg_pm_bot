@@ -90,6 +90,9 @@ docker-compose up --build -d
 docker-compose down
 ```
 
+## 1Panel 部署
+详情请看博客文章：https://blog.kixyu9527.com/archives/sDwL0yEm
+
 ---
 
 ## 不使用 Docker 运行
