@@ -65,31 +65,6 @@ WEBHOOK_URL=https://yourdomain.com/webhook
 
 ## 使用 Docker 运行（可选）
 
-### 1. 安装 Docker 和 Docker Compose
-
-确保安装并启动 Docker Desktop。
-
-### 2. 配置 `.env` 文件（Docker 模式）
-
-```dotenv
-DB_HOST=mysql
-DB_USER=botuser
-DB_PASSWORD=botpass
-DB_NAME=telegram_bot
-```
-
-### 3. 启动容器
-
-```bash
-docker-compose up --build -d
-```
-
-### 4. 停止容器
-
-```bash
-docker-compose down
-```
-
 ## 1Panel 部署
 详情请看博客文章：https://blog.kixyu9527.com/archives/sDwL0yEm
 
