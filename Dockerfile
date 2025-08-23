@@ -12,12 +12,11 @@ RUN apt-get update \
 
 WORKDIR /app
 
-# 升级 pip 并安装 requirements.txt 中所有依赖（包含 cryptography）
+# 升级 pip 并安装 requirements.txt 中所有依赖
 COPY requirements.txt ./
 RUN pip install --upgrade pip \
  && pip install --no-cache-dir -r requirements.txt
 
-# 若你还想单独指定安装最新 cryptography，可以加在这里
 # RUN pip install --no-cache-dir cryptography
 
 COPY . .

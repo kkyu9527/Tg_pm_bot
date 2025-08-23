@@ -3,6 +3,7 @@ import time
 import uvicorn
 from dotenv import load_dotenv
 from telegram import Update
+from telegram import BotCommandScopeAllGroupChats, BotCommand
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 )
@@ -42,7 +43,7 @@ def initialize_database_with_retry(db_connector: DatabaseConnector,
 async def lifespan(app: FastAPI):
     application = None
     try:
-        logger.info("🔧 初始化 Telegram 私聊转发机器人")
+        logger.info("🔧 初始化 Telegram 私聊转发机器人 V1.3.0")
 
         # 用重试机制初始化数据库，替代简单的 sleep
         db_connector = DatabaseConnector()
@@ -82,9 +83,10 @@ async def lifespan(app: FastAPI):
 
         await application.initialize()
 
-        from telegram import BotCommandScopeAllGroupChats, BotCommand
         await application.bot.set_my_commands(
-            commands=[BotCommand("delete_topic", "删除当前话题（仅限主人）")],
+            commands=[
+                BotCommand("delete_topic", "删除当前话题（仅限主人）")
+            ],
             scope=BotCommandScopeAllGroupChats()
         )
 
