@@ -1,10 +1,9 @@
 from database.db_operations import UserOperations
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram import Update
 from telegram.ext import ContextTypes
 from utils.logger import setup_logger
 from handlers.message_handlers import MessageHandlers
 from database.db_operations import TopicOperations
-import os
 
 # 设置日志记录器
 logger = setup_logger('commands', 'logs/commands.log')
@@ -49,33 +48,3 @@ class CommandHandlers:
         )
         
         await update.message.reply_text(info_message)
-        
-    @staticmethod
-    async def show_commands(update: Update, _: ContextTypes.DEFAULT_TYPE):
-        """显示所有可用命令的按钮（仅限群组中的主人使用）"""
-        user = update.effective_user
-        
-        # 检查是否是群组消息且是主人
-        if update.effective_chat.type != "group" and update.effective_chat.type != "supergroup":
-            logger.info(f"用户 {user.id} ({user.first_name}) 在非群组中请求显示命令按钮，已拒绝")
-            await update.message.reply_text("⚠️ 此命令只能在群组中使用")
-            return
-            
-        if str(user.id) != os.getenv("USER_ID"):
-            logger.info(f"非主人用户 {user.id} ({user.first_name}) 请求显示命令按钮，已拒绝")
-            await update.message.reply_text("⚠️ 只有主人可以使用此命令")
-            return
-        
-        logger.info(f"主人 {user.id} ({user.first_name}) 在群组中请求显示命令按钮")
-        
-        # 创建包含所有命令的键盘
-        keyboard = [
-            [KeyboardButton("/delete_topic")]
-        ]
-        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-        
-        await update.message.reply_text(
-            "📋 以下是可用的命令：", 
-            reply_markup=reply_markup
-        )
-        logger.info(f"已为主人 {user.id} 显示命令按钮")

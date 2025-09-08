@@ -323,7 +323,7 @@ class MessageHandlers:
                 error_message = str(e)
                 logger.error(f"删除消息失败: {error_message}, 用户ID: {user_id}, 消息ID: {message_id}")
                 if "Message can't be deleted for everyone" in error_message:
-                    await query.edit_message_text(f"⚠️ 删除失败: 消息已超过48小时，无法删除", 
+                    await query.edit_message_text(f"⚠️ 删除失败: 消息已超过48小时，无法删除，只能编辑",
                                            reply_markup=MessageHandlers.build_action_keyboard(message_id, user_id))
                 else:
                     await query.edit_message_text(f"⚠️ 删除失败: {error_message}", 
