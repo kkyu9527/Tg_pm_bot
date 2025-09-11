@@ -8,3 +8,5 @@ logs/
 .idea
 
 mysql_backup/
+
+.DS_Store
