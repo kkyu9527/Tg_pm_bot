@@ -43,7 +43,7 @@ def initialize_database_with_retry(db_connector: DatabaseConnector,
 async def lifespan(app: FastAPI):
     application = None
     try:
-        logger.info("🔧 初始化 Telegram 私聊转发机器人 V0.3.0")
+        logger.info("🔧 初始化 Telegram 私聊转发机器人 V1.0.1")
 
         # 用重试机制初始化数据库，替代简单的 sleep
         db_connector = DatabaseConnector()
