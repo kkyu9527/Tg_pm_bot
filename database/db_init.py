@@ -1,7 +1,7 @@
 from utils.logger import setup_logger
 
 # 设置日志记录器
-logger = setup_logger('db_init', 'logs/db_init.log')
+logger = setup_logger('db_init')
 
 class DatabaseInitializer:
     """数据库初始化类"""

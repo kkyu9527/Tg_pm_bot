@@ -6,7 +6,7 @@ from handlers.message_handlers import MessageHandlers
 from database.db_operations import TopicOperations
 
 # 设置日志记录器
-logger = setup_logger('commands', 'logs/commands.log')
+logger = setup_logger('commands')
 
 class CommandHandlers:
     """处理机器人命令的类"""

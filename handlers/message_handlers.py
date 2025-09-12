@@ -13,7 +13,7 @@ load_dotenv()
 
 GROUP_ID = os.getenv("GROUP_ID")
 USER_ID = os.getenv("USER_ID")
-logger = setup_logger('messages', 'logs/messages.log')
+logger = setup_logger('messages')
 
 
 def encode_callback(action, message_id, user_id, compact=False):

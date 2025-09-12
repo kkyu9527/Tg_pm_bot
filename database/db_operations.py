@@ -4,7 +4,7 @@ from typing import Dict, Optional, Any
 import pymysql.cursors
 
 # 设置日志记录器
-logger = setup_logger('db_operations', 'logs/db_operations.log')
+logger = setup_logger('db_operations')
 
 class UserOperations:
     """用户数据库操作类"""

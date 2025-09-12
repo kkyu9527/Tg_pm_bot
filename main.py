@@ -17,7 +17,7 @@ from utils.logger import setup_logger
 
 # 加载环境变量
 load_dotenv()
-logger = setup_logger('main', 'logs/main.log')
+logger = setup_logger('main')
 
 def initialize_database_with_retry(db_connector: DatabaseConnector,
                                    max_retries: int = 10,
