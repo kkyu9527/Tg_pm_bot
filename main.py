@@ -8,12 +8,16 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 )
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
 from database.db_connector import DatabaseConnector
 from database.db_init import DatabaseInitializer
 from handlers.command_handlers import CommandHandlers
 from handlers.message_handlers import MessageHandlers
 from utils.logger import setup_logger
+
+# 全局版本号
+APP_VERSION = "1.0.1-beta"
 
 # 加载环境变量
 load_dotenv()
@@ -43,7 +47,7 @@ def initialize_database_with_retry(db_connector: DatabaseConnector,
 async def lifespan(app: FastAPI):
     application = None
     try:
-        logger.info("🔧 初始化 Telegram 私聊转发机器人 V1.0.1")
+        logger.info(f"🔧 初始化 Telegram 私聊转发机器人 V{APP_VERSION}")
 
         # 用重试机制初始化数据库，替代简单的 sleep
         db_connector = DatabaseConnector()
@@ -120,7 +124,12 @@ async def webhook(request: Request):
 
 @app.get("/")
 async def index():
-    return {"status": "running"}
+    return JSONResponse(content={
+        "status": "✅ running",
+        "service": "Telegram Forward Bot",
+        "version": APP_VERSION,
+        "uptime": time.strftime("%Y-%m-%d %H:%M:%S")
+    })
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=9527)
