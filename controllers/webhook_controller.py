@@ -3,7 +3,6 @@ Webhook控制器
 处理FastAPI的路由和响应
 """
 
-import os
 import time
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse

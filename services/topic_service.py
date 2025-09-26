@@ -4,10 +4,9 @@
 """
 
 import os
-from typing import Dict, Optional, Any
-from telegram import User
-from repositories.topic_repository import TopicRepository
-from repositories.user_repository import UserRepository
+from telegram import User, Update
+from telegram.ext import ContextTypes
+from database.db_operations import TopicOperations, UserOperations
 from utils.logger import setup_logger
 from utils.display_helpers import get_user_display_name_from_db, get_topic_display_name
 
@@ -18,16 +17,17 @@ class TopicService:
     """话题业务逻辑服务"""
     
     def __init__(self):
-        self.topic_repo = TopicRepository()
-        self.user_repo = UserRepository()
+        self.topic_ops = TopicOperations()
+        self.user_ops = UserOperations()
     
+
     async def ensure_user_topic(self, bot, user: User) -> int:
         """确保用户有对应的话题，如果没有则创建新话题"""
         # 检查用户是否已有话题
-        topic = self.topic_repo.get_user_topic(user.id)
+        topic = self.topic_ops.get_user_topic(user.id)
         if topic:
-            user_display = get_user_display_name_from_db(user.id, self.user_repo.user_ops)
-            topic_display = get_topic_display_name(topic['topic_id'], self.topic_repo.topic_ops)
+            user_display = get_user_display_name_from_db(user.id)
+            topic_display = get_topic_display_name(topic['topic_id'], self.topic_ops)
             logger.info(f"找到用户 {user_display} 的现有话题: {topic_display}")
             return topic["topic_id"]
 
@@ -42,10 +42,10 @@ class TopicService:
         topic_id = (await bot.create_forum_topic(chat_id=GROUP_ID, name=topic_name)).message_thread_id
         
         # 保存话题信息
-        self.topic_repo.save_topic(user.id, topic_id, topic_name)
+        self.topic_ops.save_topic(user.id, topic_id, topic_name)
         
-        user_display = get_user_display_name_from_db(user.id, self.user_repo.user_ops)
-        topic_display = get_topic_display_name(topic_id, self.topic_repo.topic_ops)
+        user_display = get_user_display_name_from_db(user.id, self.user_ops)
+        topic_display = get_topic_display_name(topic_id, self.topic_ops)
         logger.info(f"话题创建成功: 用户 {user_display}, 话题 {topic_display}")
 
         # 发送用户信息卡片
@@ -81,7 +81,7 @@ class TopicService:
 
         # 尝试置顶用户信息
         try:
-            topic_display = get_topic_display_name(topic_id, self.topic_repo.topic_ops)
+            topic_display = get_topic_display_name(topic_id, self.topic_ops)
             logger.info(f"尝试置顶用户信息: 话题 {topic_display}, 消息ID {sent_msg.message_id}")
             await bot.pin_chat_message(chat_id=group_id, message_id=sent_msg.message_id)
             logger.info(f"消息置顶成功: 话题 {topic_display}, 消息ID {sent_msg.message_id}")
@@ -90,14 +90,72 @@ class TopicService:
             topic_display = get_topic_display_name(topic_id)
             logger.warning(f"置顶失败: {error_message}, 话题: {topic_display}, 消息ID: {sent_msg.message_id}")
     
-    def get_topic_by_id(self, topic_id: int) -> Optional[Dict[str, Any]]:
-        """根据话题ID获取话题信息"""
-        return self.topic_repo.get_topic_by_id(topic_id)
+    async def handle_topic_deletion(self, bot, topic_id: int, group_id: str) -> dict:
+        """处理话题删除操作
+        
+        Returns:
+            dict: {
+                'success': bool,
+                'message': str
+            }
+        """
+        # 验证话题存在性
+        topic = self.topic_ops.get_topic_by_id(topic_id)
+        if not topic:
+            logger.warning(f"话题 {topic_id} 在数据库中不存在")
+            return {
+                'success': False,
+                'message': '⚠️ 此话题在数据库中不存在'
+            }
+        
+        # 尝试从 Telegram 删除话题
+        try:
+            await bot.delete_forum_topic(chat_id=group_id, message_thread_id=topic_id)
+        except Exception as e:
+            logger.warning(f"Telegram 话题删除失败: {e}")
+        
+        # 尝试从数据库删除话题
+        try:
+            # 再次检查话题是否存在
+            topic = self.topic_ops.get_topic_by_id(topic_id)
+            if not topic:
+                return {
+                    'success': False,
+                    'message': '⚠️ 数据库中未找到话题，跳过清理'
+                }
+            
+            # 从数据库中删除话题
+            self.topic_ops.delete_topic(topic_id)
+            logger.info(f"主人删除了话题 {topic_id} 以及相关数据库记录")
+            return {
+                'success': True,
+                'message': '✅ 话题已删除'
+            }
+        except Exception as e:
+            logger.error(f"从数据库中删除话题失败: {e}")
+            return {
+                'success': False,
+                'message': f'⚠️ 从数据库中删除话题失败: {e}'
+            }
     
-    def delete_topic(self, topic_id: int) -> bool:
-        """删除话题"""
-        return self.topic_repo.delete_topic(topic_id)
-    
-    def recreate_topic_if_not_found(self, topic_id: int):
-        """如果话题未找到则删除数据库记录"""
-        self.topic_repo.delete_topic(topic_id)
+    async def handle_topic_deletion_flow(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """处理主人删除话题请求的完整流程"""
+        USER_ID = os.getenv("USER_ID")
+        GROUP_ID = os.getenv("GROUP_ID")
+        
+        # 只处理群组消息且发送者是主人
+        if update.effective_chat.type == "private" or str(update.effective_user.id) != USER_ID:
+            return
+            
+        # 只处理话题消息
+        if not update.message.is_topic_message:
+            return
+
+        logger.info("主人尝试删除话题")
+
+        # 获取话题ID并委托给Service层处理
+        topic_id = update.effective_message.message_thread_id
+        result = await self.handle_topic_deletion(context.bot, topic_id, GROUP_ID)
+        
+        # 根据结果回复消息
+        await update.effective_message.reply_text(result['message'])

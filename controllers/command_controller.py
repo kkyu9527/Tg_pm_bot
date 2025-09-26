@@ -37,7 +37,7 @@ class CommandController:
         topic_id = await self.topic_service.ensure_user_topic(context.bot, user)
         
         # 获取话题信息用于日志
-        topic_info = self.topic_service.get_topic_by_id(topic_id)
+        topic_info = self.topic_service.topic_ops.get_topic_by_id(topic_id)
         topic_display = f"{topic_info['topic_name']} [话题ID:{topic_id}]" if topic_info else f"[话题ID:{topic_id}]"
         logger.info(f"用户 {user_display} 的话题 {topic_display} 已创建或已存在")
 

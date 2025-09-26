@@ -4,9 +4,8 @@
 """
 
 import os
-from typing import Dict, Optional, Any
 from telegram import User
-from repositories.user_repository import UserRepository
+from database.db_operations import UserOperations
 from utils.logger import setup_logger
 from utils.display_helpers import get_user_display_name_from_object
 
@@ -17,12 +16,12 @@ class UserService:
     """用户业务逻辑服务"""
     
     def __init__(self):
-        self.user_repo = UserRepository()
+        self.user_ops = UserOperations()
     
     def register_or_update_user(self, user: User) -> bool:
         """注册或更新用户信息"""
         try:
-            result = self.user_repo.save_user(
+            result = self.user_ops.save_user(
                 user.id, user.first_name, user.last_name, user.username
             )
             if result:
@@ -32,10 +31,6 @@ class UserService:
         except Exception as e:
             logger.error(f"保存用户信息失败: {e}")
             return False
-    
-    def get_user_info(self, user_id: int) -> Optional[Dict[str, Any]]:
-        """获取用户信息"""
-        return self.user_repo.get_user_by_id(user_id)
     
     def is_owner(self, user_id: int) -> bool:
         """检查用户是否是机器人主人"""
