@@ -172,10 +172,9 @@ class MessageService:
                     self._save_message_and_log(user_id, target_id, sent_messages[0].message_id, 
                         messages[0].message_id, direction, f"主人媒体组转发给{user_display}成功")
                     
-                    # 主人发送媒体组后显示操作按钮
-                    has_text = any(msg.text or (msg.caption and msg.caption.strip()) for msg in messages)
+                    # 主人发送媒体组后显示操作按钮（媒体组不支持编辑）
                     await messages[0].reply_text(f"✅ 媒体组已转发({len(media_group)}个媒体)",
-                        reply_markup=build_action_keyboard(sent_messages[0].message_id, user_id, has_text))
+                        reply_markup=build_action_keyboard(sent_messages[0].message_id, user_id, False))
                         
         except Exception as e:
             logger.error(f"媒体组转发失败: {e}, 用户: {user_display}")

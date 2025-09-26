@@ -109,6 +109,7 @@ async def handle_cancel_edit_callback(query, bot, message_service):
     result = message_service.cancel_message_edit(query.from_user.id)
     
     if result['success']:
+        # 只有文本消息才会进入编辑状态，所以取消时仍然显示编辑按钮
         await query.edit_message_text(
             result['message'],
             reply_markup=build_action_keyboard(result['message_id'], result['user_id'], True)
