@@ -257,7 +257,14 @@ class MessageService:
         except Exception as e:
             error_msg = str(e)
             logger.error(f"删除消息失败: {error_msg}, 用户: {user_display}, 消息ID: {message_id}")
-            return {'success': False, 'message': f'⚠️ 删除失败: {error_msg}', 'show_edit': True}
+            
+            # 针对常见错误提供友好的错误提示
+            if "Message can not be deleted for everyone" in error_msg:
+                return {'success': False, 'message': '⚠️ 消息超过48小时，无法删除', 'show_edit': True, 'remove_delete_button': True}
+            elif "Message to delete not found" in error_msg:
+                return {'success': False, 'message': '⚠️ 消息不存在或已被删除', 'show_edit': True, 'remove_delete_button': True}
+            else:
+                return {'success': False, 'message': f'⚠️ 删除失败: {error_msg}', 'show_edit': True}
 
     def start_message_edit(self, owner_user_id: int, message_id: int, user_id: int, original_message) -> str:
         """开始消息编辑操作"""

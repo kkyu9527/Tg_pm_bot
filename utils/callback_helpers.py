@@ -85,12 +85,32 @@ async def handle_delete_callback(query, bot, message_id: int, user_id: int, mess
     result = await message_service.handle_message_deletion(bot, user_id, message_id)
     
     if result['success']:
+        # 删除成功，移除所有按钮
         await query.edit_message_text(result['message'])
     else:
-        await query.edit_message_text(
-            result['message'],
-            reply_markup=build_action_keyboard(message_id, user_id, result['show_edit'])
-        )
+        # 删除失败，检查是否需要移除删除按钮
+        if result.get('remove_delete_button', False):
+            # 消息无法删除，只显示编辑按钮（如果是文本消息）
+            try:
+                if result.get('show_edit', False):
+                    # 只显示编辑按钮
+                    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+                    edit_keyboard = InlineKeyboardMarkup([[
+                        InlineKeyboardButton("✏️ 编辑", callback_data=encode_callback('edit', message_id, user_id))
+                    ]])
+                    await query.edit_message_text(result['message'], reply_markup=edit_keyboard)
+                else:
+                    # 既不能编辑也不能删除，移除所有按钮
+                    await query.edit_message_text(result['message'])
+            except Exception as e:
+                logger.warning(f"无法更新失败消息: {e}")
+        else:
+            # 其他错误，只更新文本内容，保持原有按钮不变
+            try:
+                await query.edit_message_text(result['message'])
+            except Exception as e:
+                # 如果文本也没有变化，则直接结束
+                logger.warning(f"无法更新失败消息: {e}")
 
 
 async def handle_edit_callback(query, message_id: int, user_id: int, message_service):
