@@ -97,24 +97,65 @@ class MessageService:
         key = f"{user.id}:{message.media_group_id}"
         self.media_group_cache.setdefault(key, []).append(message)
         
-        # 第一条消息时启动延迟处理
+        # 第一条消息时启动动态检测
         if len(self.media_group_cache[key]) == 1:
-            asyncio.create_task(self._process_media_group_after_delay(
+            asyncio.create_task(self._dynamic_process_media_group(
                 key, user.id, topic_id, bot, group_id, "user_to_owner"))
         return True
 
-    async def _process_media_group_after_delay(self, key: str, user_id: int, target_id: int, 
-                                             bot, target_chat: str, direction: str):
-        """延迟处理媒体组消息（统一处理用户和主人的媒体组）"""
-        await asyncio.sleep(1.5)
-        messages = self.media_group_cache.pop(key, [])
-        if not messages:
-            return
+    async def _dynamic_process_media_group(self, key: str, user_id: int, target_id: int, 
+                                          bot, target_chat: str, direction: str):
+        """动态处理媒体组消息，根据消息ID连续性自动检测媒体组是否完整"""
+        user_display = get_user_display_name_from_db(user_id)
+        last_count = 0
+        stable_count = 0
+        uploading_message = None
         
+        # 只在主人发送媒体组时显示上传中提示
+        if direction == "owner_to_user":
+            # 获取第一条消息用于回复
+            if key in self.media_group_cache and self.media_group_cache[key]:
+                first_message = self.media_group_cache[key][0]
+                uploading_message = await first_message.reply_text("📁 媒体组上传中...")
+        
+        while True:
+            await asyncio.sleep(0.5)  # 短间隔检测
+            
+            # 检查缓存是否还存在
+            if key not in self.media_group_cache:
+                return
+                
+            current_count = len(self.media_group_cache[key])
+            
+            # 如果数量没有变化，增加稳定计数
+            if current_count == last_count:
+                stable_count += 1
+            else:
+                stable_count = 0  # 重置稳定计数
+                last_count = current_count
+            
+            # 如果数量稳定超过3次检测（1.5秒），认为媒体组完整
+            if stable_count >= 3:
+                messages = self.media_group_cache.pop(key, [])
+                if messages:
+                    # 删除上传中提示消息
+                    if uploading_message:
+                        try:
+                            await uploading_message.delete()
+                        except:
+                            pass
+                    
+                    logger.info(f"媒体组检测完成: {direction}, 用户{user_display}, 共{len(messages)}个媒体")
+                    await self._send_media_group(messages, user_id, target_id, bot, target_chat, direction)
+                return
+
+    async def _send_media_group(self, messages, user_id: int, target_id: int, 
+                               bot, target_chat: str, direction: str):
+        """发送媒体组"""
         media_group = self._build_media_group(messages)
         if not media_group:
             return
-        
+            
         user_display = get_user_display_name_from_db(user_id)
         
         try:
@@ -130,9 +171,11 @@ class MessageService:
                 if sent_messages:
                     self._save_message_and_log(user_id, target_id, sent_messages[0].message_id, 
                         messages[0].message_id, direction, f"主人媒体组转发给{user_display}成功")
-                    # 主人发送时需要回复确认
-                    await messages[0].reply_text(f"✅ 已转发媒体组({len(media_group)}个媒体)给用户",
-                        reply_markup=build_action_keyboard(sent_messages[0].message_id, user_id, False))
+                    
+                    # 主人发送媒体组后显示操作按钮
+                    has_text = any(msg.text or (msg.caption and msg.caption.strip()) for msg in messages)
+                    await messages[0].reply_text(f"✅ 媒体组已转发({len(media_group)}个媒体)",
+                        reply_markup=build_action_keyboard(sent_messages[0].message_id, user_id, has_text))
                         
         except Exception as e:
             logger.error(f"媒体组转发失败: {e}, 用户: {user_display}")
@@ -197,17 +240,8 @@ class MessageService:
             await bot.delete_message(chat_id=user_id, message_id=message_id)
             deleted_count = 1
             
-            # 尝试删除相邻的消息（媒体组通常ID连续）
-            # 向前尝试删除3个消息
-            for i in range(1, 4):
-                try:
-                    await bot.delete_message(chat_id=user_id, message_id=message_id - i)
-                    deleted_count += 1
-                except:
-                    break  # 如果删除失败，停止尝试
-            
-            # 向后尝试删除3个消息
-            for i in range(1, 4):
+            # 尝试删除后续消息（媒体组最多10个，按钮在第一个上）
+            for i in range(1, 10):
                 try:
                     await bot.delete_message(chat_id=user_id, message_id=message_id + i)
                     deleted_count += 1
@@ -258,36 +292,20 @@ class MessageService:
         }
 
     async def execute_message_edit(self, bot, new_message, state) -> dict:
-        """执行消息编辑操作"""
+        """执行消息编辑操作（仅支持文本消息）"""
         user_id, old_id = state["user_id"], state["message_id"]
         user_display = get_user_display_name_from_db(user_id)
         
         try:
-            # 处理文本消息编辑
-            if new_message.text:
-                try:
-                    await bot.edit_message_text(chat_id=user_id, message_id=old_id, text=new_message.text)
-                    logger.info(f"文本消息编辑成功: 用户{user_display}, 消息ID{old_id}")
-                    return {'success': True, 'message': '✅ 已更新用户消息', 
-                           'message_id': old_id, 'show_edit': True, 'update_original': True}
-                except Exception as e:
-                    error_msg = str(e)
-                    logger.error(f"文本消息编辑失败: {error_msg}, 用户: {user_display}, 消息ID: {old_id}")
-                    return {'success': False, 'message': f'⚠️ 编辑失败：{error_msg}',
-                           'message_id': old_id, 'show_edit': True, 'update_original': True}
-            
-            # 处理非文本消息（需要删除旧消息并发送新消息）
-            else:
-                await bot.delete_message(chat_id=user_id, message_id=old_id)
-                forwarded = await self.forward_message(new_message, bot, user_id)
-                logger.info(f"非文本消息替换成功: 用户{user_display}, 新消息ID{forwarded.message_id}")
-                return {'success': True, 'message': '✅ 已重新发送消息',
-                       'message_id': forwarded.message_id, 'show_edit': bool(new_message.text), 'update_original': True}
-                       
+            await bot.edit_message_text(chat_id=user_id, message_id=old_id, text=new_message.text)
+            logger.info(f"文本消息编辑成功: 用户{user_display}, 消息ID{old_id}")
+            return {'success': True, 'message': '✅ 已更新用户消息', 
+                   'message_id': old_id, 'show_edit': True, 'update_original': True}
         except Exception as e:
-            logger.error(f"编辑失败: {e}, 用户: {user_display}, 消息ID: {old_id}")
-            return {'success': False, 'message': f'⚠️ 编辑操作失败：{e}',
-                   'message_id': old_id, 'show_edit': True, 'update_original': False}
+            error_msg = str(e)
+            logger.error(f"文本消息编辑失败: {error_msg}, 用户: {user_display}, 消息ID: {old_id}")
+            return {'success': False, 'message': f'⚠️ 编辑失败：{error_msg}',
+                   'message_id': old_id, 'show_edit': True, 'update_original': True}
 
     # ============================= 完整流程方法 =============================
 
@@ -347,9 +365,9 @@ class MessageService:
         key = f"owner:{user_id}:{message.media_group_id}"
         self.media_group_cache.setdefault(key, []).append(message)
         
-        # 第一条消息时启动延迟处理
+        # 第一条消息时启动动态检测
         if len(self.media_group_cache[key]) == 1:
-            asyncio.create_task(self._process_media_group_after_delay(
+            asyncio.create_task(self._dynamic_process_media_group(
                 key, user_id, message.message_thread_id, bot, str(user_id), "owner_to_user"))
 
 

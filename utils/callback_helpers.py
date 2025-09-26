@@ -111,7 +111,7 @@ async def handle_cancel_edit_callback(query, bot, message_service):
     if result['success']:
         await query.edit_message_text(
             result['message'],
-            reply_markup=build_action_keyboard(result['message_id'], result['user_id'])
+            reply_markup=build_action_keyboard(result['message_id'], result['user_id'], True)
         )
     else:
         await query.edit_message_text(result['message'])
