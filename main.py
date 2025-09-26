@@ -1,23 +1,22 @@
 import os
 import time
 import uvicorn
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-from telegram import Update
+from fastapi import FastAPI, Request
 from telegram import BotCommandScopeAllGroupChats, BotCommand
 from telegram.ext import (
     Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 )
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
-from contextlib import asynccontextmanager
 from database.db_connector import DatabaseConnector
 from database.db_init import DatabaseInitializer
-from handlers.command_handlers import CommandHandlers
-from handlers.message_handlers import MessageHandlers
+from controllers.command_controller import CommandController
+from controllers.message_controller import MessageController
+from controllers.webhook_controller import WebhookController
 from utils.logger import setup_logger
 
 # 全局版本号
-APP_VERSION = "1.0.1-beta"
+APP_VERSION = "1.0.2-beta"
 
 # 加载环境变量
 load_dotenv()
@@ -69,21 +68,26 @@ async def lifespan(app: FastAPI):
             .build()
         )
 
+        # 初始化控制器
+        command_controller = CommandController()
+        message_controller = MessageController()
+        webhook_controller = WebhookController(APP_VERSION)
+
         # 注册处理器
-        application.add_handler(CommandHandler("start", CommandHandlers.start_command))
-        application.add_handler(CommandHandler("info", CommandHandlers.info_command))
+        application.add_handler(CommandHandler("start", command_controller.handle_start_command))
+        application.add_handler(CommandHandler("info", command_controller.handle_info_command))
         application.add_handler(
-            CommandHandler("delete_topic", MessageHandlers.handle_owner_delete_topic)
+            CommandHandler("delete_topic", message_controller.handle_owner_delete_topic)
         )
         application.add_handler(
             MessageHandler(filters.ChatType.PRIVATE & ~filters.COMMAND,
-                           MessageHandlers.handle_user_message)
+                           message_controller.handle_user_message)
         )
         application.add_handler(
             MessageHandler(filters.ChatType.GROUPS & filters.IS_TOPIC_MESSAGE,
-                           MessageHandlers.handle_owner_message)
+                           message_controller.handle_owner_message)
         )
-        application.add_handler(CallbackQueryHandler(MessageHandlers.handle_button_callback))
+        application.add_handler(CallbackQueryHandler(message_controller.handle_button_callback))
 
         await application.initialize()
 
@@ -97,6 +101,7 @@ async def lifespan(app: FastAPI):
         await application.start()
         await application.bot.set_webhook(url=webhook_url)
         app.state.application = application
+        app.state.webhook_controller = webhook_controller
         logger.info(f"🚀 Webhook 已设置: {webhook_url}")
 
         yield
@@ -116,20 +121,11 @@ app = FastAPI(lifespan=lifespan)
 
 @app.post("/webhook")
 async def webhook(request: Request):
-    data = await request.json()
-    logger.info("📩 收到 Webhook 更新")
-    update = Update.de_json(data, bot=app.state.application.bot)
-    await app.state.application.update_queue.put(update)
-    return Response(content="OK", status_code=200)
+    return await app.state.webhook_controller.handle_webhook(request, app.state.application)
 
 @app.get("/")
 async def index():
-    return JSONResponse(content={
-        "status": "✅ running",
-        "service": "Telegram Forward Bot",
-        "version": APP_VERSION,
-        "uptime": time.strftime("%Y-%m-%d %H:%M:%S")
-    })
+    return await app.state.webhook_controller.handle_index()
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=9527)
