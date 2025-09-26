@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes
 from utils.logger import setup_logger
 from handlers.message_handlers import MessageHandlers
 from database.db_operations import TopicOperations
+from utils.display_helpers import get_user_display_name_from_object
 
 # 设置日志记录器
 logger = setup_logger('commands')
@@ -15,7 +16,8 @@ class CommandHandlers:
     async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /start 命令"""
         user = update.effective_user
-        logger.info(f"用户 {user.id} ({user.first_name}) 发送了 /start 命令")
+        user_display = get_user_display_name_from_object(user)
+        logger.info(f"用户 {user_display} 发送了 /start 命令")
 
         UserOperations().save_user(user.id, user.first_name, user.last_name, user.username)
 
@@ -32,13 +34,18 @@ class CommandHandlers:
 
         # ✅ 创建话题 & 发送欢迎卡片到群组
         topic_id = await MessageHandlers.ensure_topic(context.bot, user, TopicOperations())
-        logger.info(f"用户 {user.id} 的话题 {topic_id} 已创建或已存在")
+        # 获取话题信息用于日志
+        topic_ops = TopicOperations()
+        topic_info = topic_ops.get_topic_by_id(topic_id)
+        topic_display = f"{topic_info['topic_name']} [话题ID:{topic_id}]" if topic_info else f"[话题ID:{topic_id}]"
+        logger.info(f"用户 {user_display} 的话题 {topic_display} 已创建或已存在")
 
     @staticmethod
     async def info_command(update: Update, _: ContextTypes.DEFAULT_TYPE):
         """处理 /info 命令"""
         user = update.effective_user
-        logger.info(f"用户 {user.id} ({user.first_name}) 发送了 /info 命令")
+        user_display = get_user_display_name_from_object(user)
+        logger.info(f"用户 {user_display} 发送了 /info 命令")
         
         info_message = (
             "ℹ️ 关于私聊转发机器人\n\n"

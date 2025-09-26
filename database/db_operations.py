@@ -1,10 +1,23 @@
 from database.db_connector import DatabaseConnector
 from utils.logger import setup_logger
+from utils.display_helpers import get_user_display_name_from_object
 from typing import Dict, Optional, Any
+from contextlib import contextmanager
 import pymysql.cursors
 
 # 设置日志记录器
 logger = setup_logger('db_operations')
+
+@contextmanager
+def get_db_connection(db_connector):
+    """数据库连接上下文管理器"""
+    connection = None
+    try:
+        connection = db_connector.get_connection()
+        yield connection
+    finally:
+        if connection:
+            connection.close()
 
 class UserOperations:
     """用户数据库操作类"""
@@ -15,48 +28,50 @@ class UserOperations:
 
     def save_user(self, user_id: int, first_name: str, last_name: Optional[str] = None, username: Optional[str] = None) -> bool:
         """保存用户信息到数据库"""
-        connection = None
         try:
-            connection = self.db_connector.get_connection()
-            with connection.cursor() as cursor:
-                # 检查用户是否已存在
-                cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
-                if cursor.fetchone():
-                    # 更新用户信息
-                    cursor.execute(
-                        "UPDATE users SET first_name = %s, last_name = %s, username = %s WHERE id = %s",
-                        (first_name, last_name, username, user_id)
-                    )
-                else:
-                    # 插入新用户
-                    cursor.execute(
-                        "INSERT INTO users (id, first_name, last_name, username) VALUES (%s, %s, %s, %s)",
-                        (user_id, first_name, last_name, username)
-                    )
-                connection.commit()
-                logger.info(f"用户 {user_id} 信息已保存")
-                return True
+            with get_db_connection(self.db_connector) as connection:
+                with connection.cursor() as cursor:
+                    # 检查用户是否已存在
+                    cursor.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+                    if cursor.fetchone():
+                        # 更新用户信息
+                        cursor.execute(
+                            "UPDATE users SET first_name = %s, last_name = %s, username = %s WHERE id = %s",
+                            (first_name, last_name, username, user_id)
+                        )
+                    else:
+                        # 插入新用户
+                        cursor.execute(
+                            "INSERT INTO users (id, first_name, last_name, username) VALUES (%s, %s, %s, %s)",
+                            (user_id, first_name, last_name, username)
+                        )
+                    connection.commit()
+                    # 使用工具函数生成显示名称
+                    class MockUser:
+                        def __init__(self, first_name, last_name, username, user_id):
+                            self.first_name = first_name
+                            self.last_name = last_name
+                            self.username = username
+                            self.id = user_id
+                    
+                    mock_user = MockUser(first_name, last_name, username, user_id)
+                    user_display = get_user_display_name_from_object(mock_user)
+                    logger.info(f"用户 {user_display} 信息已保存")
+                    return True
         except Exception as e:
             logger.error(f"保存用户信息时出错: {e}")
             return False
-        finally:
-            if connection:
-                connection.close()
 
     def get_user(self, user_id: int) -> Optional[Dict[str, Any]]:
         """获取用户信息"""
-        connection = None
         try:
-            connection = self.db_connector.get_connection()
-            with connection.cursor(pymysql.cursors.DictCursor) as cursor:
-                cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-                return cursor.fetchone()
+            with get_db_connection(self.db_connector) as connection:
+                with connection.cursor(pymysql.cursors.DictCursor) as cursor:
+                    cursor.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+                    return cursor.fetchone()
         except Exception as e:
             logger.error(f"获取用户信息时出错: {e}")
             return None
-        finally:
-            if connection:
-                connection.close()
 
 
 class TopicOperations:
@@ -87,7 +102,7 @@ class TopicOperations:
                         (user_id, topic_id, topic_name)
                     )
                 connection.commit()
-                logger.info(f"话题 {topic_id} 信息已保存")
+                logger.info(f"话题 {topic_name} [话题ID:{topic_id}] 信息已保存")
                 return True
         except Exception as e:
             logger.error(f"保存话题信息时出错: {e}")
@@ -175,7 +190,10 @@ class MessageOperations:
                     (user_id, topic_id, user_message_id, group_message_id, direction)
                 )
                 connection.commit()
-                logger.info(f"消息记录已保存: 用户 {user_id}, 话题 {topic_id}")
+                # 使用工具函数生成用户显示名称
+                from utils.display_helpers import get_user_display_name_from_db
+                user_display = get_user_display_name_from_db(user_id, UserOperations())
+                logger.info(f"消息记录已保存: 用户 {user_display}, 话题ID {topic_id}")
                 return True
         except Exception as e:
             logger.error(f"保存消息记录时出错: {e}")
