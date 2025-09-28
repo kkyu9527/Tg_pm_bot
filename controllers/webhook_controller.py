@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from telegram import Update
 from utils.logger import setup_logger
 
-logger = setup_logger('webhook_controller')
+logger = setup_logger('web_ctrl')
 
 
 class WebhookController:

@@ -10,7 +10,7 @@ from database.db_operations import TopicOperations, UserOperations
 from utils.logger import setup_logger
 from utils.display_helpers import get_user_display_name_from_db, get_topic_display_name
 
-logger = setup_logger('topic_service')
+logger = setup_logger('top_srvc')
 
 
 class TopicService:

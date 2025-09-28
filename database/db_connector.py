@@ -7,7 +7,7 @@ from utils.logger import setup_logger
 load_dotenv()
 
 # 设置日志记录器
-logger = setup_logger('database')
+logger = setup_logger('db_conn')
 
 class DatabaseConnector:
     """数据库连接器类"""

@@ -6,7 +6,7 @@ from contextlib import contextmanager
 import pymysql.cursors
 
 # 设置日志记录器
-logger = setup_logger('db_operations')
+logger = setup_logger('db_ops')
 
 @contextmanager
 def get_db_connection(db_connector):

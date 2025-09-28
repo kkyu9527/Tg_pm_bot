@@ -16,7 +16,7 @@ from utils.display_helpers import get_user_display_name_from_db
 from utils.callback_helpers import decode_callback, build_action_keyboard, \
     handle_delete_callback, handle_edit_callback, handle_cancel_edit_callback, handle_message_edit_execution
 
-logger = setup_logger('message_service')
+logger = setup_logger('msg_srvc')
 
 
 class MessageService:

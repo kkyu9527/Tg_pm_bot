@@ -13,10 +13,10 @@ from database.db_init import DatabaseInitializer
 from controllers.command_controller import CommandController
 from controllers.message_controller import MessageController
 from controllers.webhook_controller import WebhookController
-from utils.logger import setup_logger
+from utils.logger import setup_logger, UVICORN_LOGGING_CONFIG
 
 # 全局版本号
-APP_VERSION = "1.1.2-beta"
+APP_VERSION = "1.1.3-beta"
 
 # 加载环境变量
 load_dotenv()
@@ -128,4 +128,4 @@ async def index():
     return await app.state.webhook_controller.handle_index()
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=9527)
+    uvicorn.run(app, host="0.0.0.0", port=9527, log_config=UVICORN_LOGGING_CONFIG)

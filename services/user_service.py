@@ -9,7 +9,7 @@ from database.db_operations import UserOperations
 from utils.logger import setup_logger
 from utils.display_helpers import get_user_display_name_from_object
 
-logger = setup_logger('user_service')
+logger = setup_logger('user_srvc')
 
 
 class UserService:

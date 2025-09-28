@@ -7,7 +7,7 @@ import json
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from utils.logger import setup_logger
 
-logger = setup_logger('callback_helpers')
+logger = setup_logger('cb_hlp')
 
 
 def encode_callback(action, message_id, user_id, compact=False):

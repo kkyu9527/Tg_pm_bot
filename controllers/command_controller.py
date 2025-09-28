@@ -10,7 +10,7 @@ from services.topic_service import TopicService
 from utils.logger import setup_logger
 from utils.display_helpers import get_user_display_name_from_object
 
-logger = setup_logger('command_controller')
+logger = setup_logger('cmd_ctrl')
 
 
 class CommandController:

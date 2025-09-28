@@ -9,7 +9,7 @@ from services.message_service import MessageService
 from services.topic_service import TopicService
 from utils.logger import setup_logger
 
-logger = setup_logger('message_controller')
+logger = setup_logger('msg_ctrl')
 
 
 class MessageController:
