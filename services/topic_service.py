@@ -19,6 +19,8 @@ class TopicService:
     def __init__(self):
         self.topic_ops = TopicOperations()
         self.user_ops = UserOperations()
+        self.USER_ID = os.getenv("USER_ID")
+        self.GROUP_ID = os.getenv("GROUP_ID")
     
 
     async def ensure_user_topic(self, bot, user: User) -> int:
@@ -32,14 +34,13 @@ class TopicService:
             return topic["topic_id"]
 
         # 创建新话题
-        GROUP_ID = os.getenv("GROUP_ID")
         topic_name = f"{user.first_name} {(user.last_name or '')}".strip() + f" (ID: {user.id})"
         username = f"@{user.username}" if user.username else "无用户名"
         user_display = get_user_display_name_from_db(user.id)
         logger.info(f"为用户 {user_display} 创建新话题: {topic_name}")
         
         # 通过Telegram API创建话题
-        topic_id = (await bot.create_forum_topic(chat_id=GROUP_ID, name=topic_name)).message_thread_id
+        topic_id = (await bot.create_forum_topic(chat_id=self.GROUP_ID, name=topic_name)).message_thread_id
         
         # 保存话题信息
         self.topic_ops.save_topic(user.id, topic_id, topic_name)
@@ -49,7 +50,7 @@ class TopicService:
         logger.info(f"话题创建成功: 用户 {user_display}, 话题 {topic_display}")
 
         # 发送用户信息卡片
-        await self._send_user_info_card(bot, user, topic_id, username, GROUP_ID)
+        await self._send_user_info_card(bot, user, topic_id, username, self.GROUP_ID)
         
         return topic_id
     
@@ -140,11 +141,9 @@ class TopicService:
     
     async def handle_topic_deletion_flow(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理主人删除话题请求的完整流程"""
-        USER_ID = os.getenv("USER_ID")
-        GROUP_ID = os.getenv("GROUP_ID")
         
         # 只处理群组消息且发送者是主人
-        if update.effective_chat.type == "private" or str(update.effective_user.id) != USER_ID:
+        if update.effective_chat.type == "private" or str(update.effective_user.id) != self.USER_ID:
             return
             
         # 只处理话题消息
@@ -154,5 +153,5 @@ class TopicService:
         logger.info("主人尝试删除话题")
 
         topic_id = update.effective_message.message_thread_id
-        result = await self.handle_topic_deletion(context.bot, topic_id, GROUP_ID)
+        result = await self.handle_topic_deletion(context.bot, topic_id, self.GROUP_ID)
         logger.info(f"话题删除操作完成: {result['message']}")
