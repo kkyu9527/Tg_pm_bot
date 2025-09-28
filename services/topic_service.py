@@ -153,9 +153,6 @@ class TopicService:
 
         logger.info("主人尝试删除话题")
 
-        # 获取话题ID并委托给Service层处理
         topic_id = update.effective_message.message_thread_id
         result = await self.handle_topic_deletion(context.bot, topic_id, GROUP_ID)
-        
-        # 根据结果回复消息
-        await update.effective_message.reply_text(result['message'])
+        logger.info(f"话题删除操作完成: {result['message']}")

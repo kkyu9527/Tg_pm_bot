@@ -44,18 +44,18 @@ class MessageService:
         for msg in sorted(messages, key=lambda x: x.message_id):
             if msg.photo:
                 media_group.append(InputMediaPhoto(
-                    media=msg.photo[-1].file_id, 
+                    media=msg.photo[-1].file_id,
                     caption=msg.caption
                 ))
             elif msg.video:
                 media_group.append(InputMediaVideo(
-                    media=msg.video.file_id, 
+                    media=msg.video.file_id,
                     caption=msg.caption
                 ))
         return media_group
 
-    def _save_message_and_log(self, user_id: int, topic_id: int, original_id: int, 
-                             forwarded_id: int, direction: str, success_msg: str) -> bool:
+    def _save_message_and_log(self, user_id: int, topic_id: int, original_id: int,
+                              forwarded_id: int, direction: str, success_msg: str) -> bool:
         """保存消息记录并记录日志"""
         result = self.message_ops.save_message(user_id, topic_id, original_id, forwarded_id, direction)
         if result:
@@ -83,7 +83,7 @@ class MessageService:
         from services.topic_service import TopicService
         user_service = UserService()
         topic_service = TopicService()
-        
+
         user_service.register_or_update_user(user)
         topic_id = await topic_service.ensure_user_topic(bot, user)
 
@@ -94,48 +94,49 @@ class MessageService:
         # 处理普通消息
         return await self._handle_regular_message_forward(message, user, topic_id, bot, self.group_id)
 
-    async def _handle_media_group_message(self, message: Message, user: User, topic_id: int, bot, group_id: str) -> bool:
+    async def _handle_media_group_message(self, message: Message, user: User, topic_id: int, bot,
+                                          group_id: str) -> bool:
         """处理媒体组消息"""
         key = f"{user.id}:{message.media_group_id}"
         self.media_group_cache.setdefault(key, []).append(message)
-        
+
         # 第一条消息时启动动态检测
         if len(self.media_group_cache[key]) == 1:
             asyncio.create_task(self._dynamic_process_media_group(
                 key, user.id, topic_id, bot, group_id, "user_to_owner"))
         return True
 
-    async def _dynamic_process_media_group(self, key: str, user_id: int, target_id: int, 
-                                          bot, target_chat: str, direction: str):
+    async def _dynamic_process_media_group(self, key: str, user_id: int, target_id: int,
+                                           bot, target_chat: str, direction: str):
         """动态处理媒体组消息，根据消息ID连续性自动检测媒体组是否完整"""
         user_display = get_user_display_name_from_db(user_id)
         last_count = 0
         stable_count = 0
         uploading_message = None
-        
+
         # 只在主人发送媒体组时显示上传中提示
         if direction == "owner_to_user":
             # 获取第一条消息用于回复
             if key in self.media_group_cache and self.media_group_cache[key]:
                 first_message = self.media_group_cache[key][0]
                 uploading_message = await first_message.reply_text("📁 媒体组上传中...")
-        
+
         while True:
             await asyncio.sleep(0.5)  # 短间隔检测
-            
+
             # 检查缓存是否还存在
             if key not in self.media_group_cache:
                 return
-                
+
             current_count = len(self.media_group_cache[key])
-            
+
             # 如果数量没有变化，增加稳定计数
             if current_count == last_count:
                 stable_count += 1
             else:
                 stable_count = 0  # 重置稳定计数
                 last_count = current_count
-            
+
             # 如果数量稳定超过3次检测（1.5秒），认为媒体组完整
             if stable_count >= 3:
                 messages = self.media_group_cache.pop(key, [])
@@ -146,51 +147,55 @@ class MessageService:
                             await uploading_message.delete()
                         except:
                             pass
-                    
+
                     logger.info(f"媒体组检测完成: {direction}, 用户{user_display}, 共{len(messages)}个媒体")
                     await self._send_media_group(messages, user_id, target_id, bot, target_chat, direction)
                 return
 
-    async def _send_media_group(self, messages, user_id: int, target_id: int, 
-                               bot, target_chat: str, direction: str):
+    async def _send_media_group(self, messages, user_id: int, target_id: int,
+                                bot, target_chat: str, direction: str):
         """发送媒体组"""
         media_group = self._build_media_group(messages)
         if not media_group:
             return
-            
+
         user_display = get_user_display_name_from_db(user_id)
-        
+
         try:
             # 根据方向发送媒体组
             if direction == "user_to_owner":
                 sent_messages = await bot.send_media_group(
                     chat_id=target_chat, message_thread_id=target_id, media=media_group)
                 if sent_messages:
-                    self._save_message_and_log(user_id, target_id, messages[0].message_id, 
-                        sent_messages[0].message_id, direction, f"用户{user_display}媒体组转发成功")
+                    self._save_message_and_log(user_id, target_id, messages[0].message_id,
+                                               sent_messages[0].message_id, direction,
+                                               f"用户{user_display}媒体组转发成功")
             else:  # owner_to_user
                 sent_messages = await bot.send_media_group(chat_id=target_chat, media=media_group)
                 if sent_messages:
-                    self._save_message_and_log(user_id, target_id, sent_messages[0].message_id, 
-                        messages[0].message_id, direction, f"主人媒体组转发给{user_display}成功")
-                    
+                    self._save_message_and_log(user_id, target_id, sent_messages[0].message_id,
+                                               messages[0].message_id, direction, f"主人媒体组转发给{user_display}成功")
+
                     # 主人发送媒体组后显示操作按钮（媒体组不支持编辑）
                     # 默认显示删除按钮，如果超过48小时会在删除时被移除
                     await messages[0].reply_text(f"✅ 媒体组已转发({len(media_group)}个媒体)",
-                        reply_markup=build_action_keyboard(sent_messages[0].message_id, user_id, show_edit=False, show_delete=True))
-                        
+                                                 reply_markup=build_action_keyboard(sent_messages[0].message_id,
+                                                                                    user_id, show_edit=False,
+                                                                                    show_delete=True))
+
         except Exception as e:
             logger.error(f"媒体组转发失败: {e}, 用户: {user_display}")
             if direction == "owner_to_user" and messages:
                 await messages[0].reply_text(f"⚠️ 媒体组转发失败: {e}")
 
-    async def _handle_regular_message_forward(self, message: Message, user: User, topic_id: int, bot, group_id: str) -> bool:
+    async def _handle_regular_message_forward(self, message: Message, user: User, topic_id: int, bot,
+                                              group_id: str) -> bool:
         """处理普通消息转发"""
         user_display = get_user_display_name_from_db(user.id)
         try:
             forwarded = await self.forward_message(message, bot, group_id, topic_id)
-            self._save_message_and_log(user.id, topic_id, message.message_id, 
-                forwarded.message_id, "user_to_owner", f"用户{user_display}消息转发成功")
+            self._save_message_and_log(user.id, topic_id, message.message_id,
+                                       forwarded.message_id, "user_to_owner", f"用户{user_display}消息转发成功")
             return True
         except BadRequest as e:
             if "Message thread not found" in str(e):
@@ -211,8 +216,8 @@ class MessageService:
 
         try:
             forwarded = await self.forward_message(message, bot, group_id, new_topic_id)
-            self._save_message_and_log(user.id, new_topic_id, message.message_id, 
-                forwarded.message_id, "user_to_owner", f"用户{user_display}消息转发到新话题成功")
+            self._save_message_and_log(user.id, new_topic_id, message.message_id,
+                                       forwarded.message_id, "user_to_owner", f"用户{user_display}消息转发到新话题成功")
             return True
         except Exception as e:
             logger.error(f"用户{user_display}消息在重新创建话题后转发失败: {e}")
@@ -236,12 +241,12 @@ class MessageService:
     async def handle_message_deletion(self, bot, user_id: int, message_id: int) -> dict:
         """处理消息删除操作（支持媒体组批量删除）"""
         user_display = get_user_display_name_from_db(user_id)
-        
+
         try:
             # 先尝试删除目标消息
             await bot.delete_message(chat_id=user_id, message_id=message_id)
             deleted_count = 1
-            
+
             # 尝试删除后续消息（媒体组最多10个，按钮在第一个上）
             for i in range(1, 10):
                 try:
@@ -249,23 +254,25 @@ class MessageService:
                     deleted_count += 1
                 except:
                     break  # 如果删除失败，停止尝试
-            
+
             if deleted_count > 1:
                 logger.info(f"已删除发送给用户 {user_display} 的媒体组({deleted_count}个消息)")
                 return {'success': True, 'message': f'✅ 已删除媒体组({deleted_count}个消息)', 'show_edit': False}
             else:
                 logger.info(f"已删除发送给用户 {user_display} 的消息 {message_id}")
                 return {'success': True, 'message': '✅ 消息已删除', 'show_edit': False}
-                
+
         except Exception as e:
             error_msg = str(e)
             logger.error(f"删除消息失败: {error_msg}, 用户: {user_display}, 消息ID: {message_id}")
-            
+
             # 针对常见错误提供友好的错误提示
             if "Message can't be deleted for everyone" in error_msg:
-                return {'success': False, 'message': '⚠️ 消息超过48小时，无法删除', 'show_edit': True, 'remove_delete_button': True}
+                return {'success': False, 'message': '⚠️ 消息超过48小时，无法删除', 'show_edit': True,
+                        'remove_delete_button': True}
             elif "Message to delete not found" in error_msg:
-                return {'success': False, 'message': '⚠️ 消息不存在或已被删除', 'show_edit': True, 'remove_delete_button': True}
+                return {'success': False, 'message': '⚠️ 消息不存在或已被删除', 'show_edit': True,
+                        'remove_delete_button': True}
             else:
                 return {'success': False, 'message': f'⚠️ 删除失败: {error_msg}', 'show_edit': True}
 
@@ -282,21 +289,21 @@ class MessageService:
     def cancel_message_edit(self, owner_user_id: int) -> dict:
         """取消消息编辑操作"""
         state = self.edit_states.pop(owner_user_id, None)
-        
+
         if state is not None:
             user_display = get_user_display_name_from_db(state['user_id'])
             logger.info(f"主人取消编辑发送给用户 {user_display} 的消息 {state['message_id']}")
             return {
-                'success': True, 
-                'message': '❎ 已取消编辑', 
-                'message_id': state['message_id'], 
+                'success': True,
+                'message': '❎ 已取消编辑',
+                'message_id': state['message_id'],
                 'user_id': state['user_id']
             }
-        
+
         return {
-            'success': False, 
-            'message': '⚠️ 未找到编辑状态', 
-            'message_id': None, 
+            'success': False,
+            'message': '⚠️ 未找到编辑状态',
+            'message_id': None,
             'user_id': None
         }
 
@@ -304,18 +311,18 @@ class MessageService:
         """执行消息编辑操作（仅支持文本消息）"""
         user_id, old_id = state["user_id"], state["message_id"]
         user_display = get_user_display_name_from_db(user_id)
-        
+
         try:
             await bot.edit_message_text(chat_id=user_id, message_id=old_id, text=new_message.text)
             logger.info(f"文本消息编辑成功: 用户{user_display}, 消息ID{old_id}")
             # 编辑成功后，默认显示删除按钮（新编辑的消息不会超过48小时）
-            return {'success': True, 'message': '✅ 已更新用户消息', 
-                   'message_id': old_id, 'show_delete': True, 'update_original': True}
+            return {'success': True, 'message': '✅ 已更新用户消息',
+                    'message_id': old_id, 'show_delete': True, 'update_original': True}
         except Exception as e:
             error_msg = str(e)
             logger.error(f"文本消息编辑失败: {error_msg}, 用户: {user_display}, 消息ID: {old_id}")
             return {'success': False, 'message': f'⚠️ 编辑失败：{error_msg}',
-                   'message_id': old_id, 'show_delete': True, 'update_original': True}
+                    'message_id': old_id, 'show_delete': True, 'update_original': True}
 
     # ============================= 完整流程方法 =============================
 
@@ -329,14 +336,10 @@ class MessageService:
         user_display = get_user_display_name_from_db(user.id)
         logger.info(f"收到用户 {user_display} 的消息，消息ID: {message.message_id}")
 
-        success = await self.handle_user_message_forward(message, user, bot)
-        status = "完成" if success else "失败"
-        logger.info(f"用户 {user_display} 的消息处理{status}")
-
     async def handle_owner_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理主人在群组中发送消息的完整流程"""
         self.cleanup_edit_states()
-        
+
         # 只处理群组消息且发送者是主人
         if update.effective_chat.type == "private" or str(update.effective_user.id) != self.owner_user_id:
             return
@@ -363,7 +366,7 @@ class MessageService:
             return
 
         user_id = topic["user_id"]
-        
+
         # 处理媒体组消息
         if message.media_group_id and (message.photo or message.video):
             await self._handle_owner_media_group_message(message, user_id, context.bot)
@@ -374,28 +377,27 @@ class MessageService:
         """处理主人发送的媒体组消息"""
         key = f"owner:{user_id}:{message.media_group_id}"
         self.media_group_cache.setdefault(key, []).append(message)
-        
+
         # 第一条消息时启动动态检测
         if len(self.media_group_cache[key]) == 1:
             asyncio.create_task(self._dynamic_process_media_group(
                 key, user_id, message.message_thread_id, bot, str(user_id), "owner_to_user"))
-
-
 
     async def _handle_owner_message_forward(self, message, user_id: int, bot):
         """处理主人消息转发"""
         user_display = get_user_display_name_from_db(user_id)
         try:
             forwarded = await self.forward_message(message, bot, user_id)
-            self._save_message_and_log(user_id, message.message_thread_id, forwarded.message_id, 
-                message.message_id, "owner_to_user", f"主人消息转发给{user_display}成功")
-            
+            self._save_message_and_log(user_id, message.message_thread_id, forwarded.message_id,
+                                       message.message_id, "owner_to_user", f"主人消息转发给{user_display}成功")
+
             # 判断按钮显示逻辑
             show_edit = bool(message.text)  # 只有文本消息才显示编辑按钮
             show_delete = True  # 默认显示删除按钮，如果超过48小时会在删除时被移除
-            
+
             await message.reply_text("✅ 已转发给用户",
-                reply_markup=build_action_keyboard(forwarded.message_id, user_id, show_edit=show_edit, show_delete=show_delete))
+                                     reply_markup=build_action_keyboard(forwarded.message_id, user_id,
+                                                                        show_edit=show_edit, show_delete=show_delete))
         except Exception as e:
             logger.error(f"转发失败: {e}, 用户: {user_display}")
             await message.reply_text(f"⚠️ 转发失败: {e}")

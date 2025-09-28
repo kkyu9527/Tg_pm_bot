@@ -14,7 +14,7 @@ from controllers.webhook_controller import WebhookController
 from utils.logger import setup_logger
 
 # 全局版本号
-APP_VERSION = "1.1.3-beta"
+APP_VERSION = "1.1.4-beta"
 
 logger = setup_logger('app_init')
 
@@ -23,12 +23,12 @@ def initialize_database_with_retry(db_connector: DatabaseConnector,
                                    delay: int = 3) -> None:
     """
     重试机制：尝试连接并初始化数据库，直到成功或达到最大重试次数。
-    
+
     Args:
         db_connector: 数据库连接器实例
         max_retries: 最大重试次数
         delay: 重试间隔（秒）
-    
+
     Raises:
         RuntimeError: 超过最大重试次数仍未成功
     """
