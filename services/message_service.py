@@ -58,8 +58,10 @@ class MessageService:
                              forwarded_id: int, direction: str, success_msg: str) -> bool:
         """保存消息记录并记录日志"""
         result = self.message_ops.save_message(user_id, topic_id, original_id, forwarded_id, direction)
-        logger.info(f"{success_msg}，消息ID: {original_id} -> {forwarded_id}" if result 
-                   else f"{success_msg}但保存失败")
+        if result:
+            logger.info(f"{success_msg}，消息ID: {original_id} -> {forwarded_id}")
+        else:
+            logger.error(f"{success_msg}但保存失败")
         return result
 
     async def forward_message(self, message: Message, bot, chat_id: int, thread_id: int = None) -> Message:
@@ -260,7 +262,7 @@ class MessageService:
             logger.error(f"删除消息失败: {error_msg}, 用户: {user_display}, 消息ID: {message_id}")
             
             # 针对常见错误提供友好的错误提示
-            if "Message can not be deleted for everyone" in error_msg or "Message can't be deleted for everyone" in error_msg:
+            if "Message can't be deleted for everyone" in error_msg:
                 return {'success': False, 'message': '⚠️ 消息超过48小时，无法删除', 'show_edit': True, 'remove_delete_button': True}
             elif "Message to delete not found" in error_msg:
                 return {'success': False, 'message': '⚠️ 消息不存在或已被删除', 'show_edit': True, 'remove_delete_button': True}

@@ -8,7 +8,8 @@ def setup_logger(name, level=logging.INFO):
     if not logger.handlers:
         console_handler = logging.StreamHandler()
         formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            "%(asctime)s - %(lineno)-4d - %(name)-10s - %(levelname)-8s - %(message)s",
+            datefmt="%H:%M:%S"
         )
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
