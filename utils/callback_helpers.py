@@ -30,13 +30,14 @@ def decode_callback(data):
     }
 
 
-def build_action_keyboard(message_id, user_id, show_edit=True, actions=None):
+def build_action_keyboard(message_id, user_id, show_edit=False, show_delete=False, actions=None):
     """构建消息操作键盘
     
     Args:
         message_id: 消息ID
         user_id: 用户ID
-        show_edit: 是否显示编辑按钮，默认True
+        show_edit: 是否显示编辑按钮
+        show_delete: 是否显示删除按钮
         actions: 动作常量字典，默认使用标准动作
     """
     if actions is None:
@@ -54,11 +55,15 @@ def build_action_keyboard(message_id, user_id, show_edit=True, actions=None):
             callback_data=encode_callback(actions['edit'], message_id, user_id)
         ))
     
-    # 始终添加删除按钮
-    buttons.append(InlineKeyboardButton(
-        "🗑️ 删除",
-        callback_data=encode_callback(actions['delete'], message_id, user_id)
-    ))
+    # 如果显示删除按钮，添加删除按钮
+    if show_delete:
+        buttons.append(InlineKeyboardButton(
+            "🗑️ 删除",
+            callback_data=encode_callback(actions['delete'], message_id, user_id)
+        ))
+    
+    if not buttons:
+        return None
     
     return InlineKeyboardMarkup([buttons])
 
@@ -88,28 +93,20 @@ async def handle_delete_callback(query, bot, message_id: int, user_id: int, mess
         # 删除成功，移除所有按钮
         await query.edit_message_text(result['message'])
     else:
-        # 删除失败，检查是否需要移除删除按钮
+        # 删除失败，根据错误类型决定后续操作
         if result.get('remove_delete_button', False):
-            # 消息无法删除，只显示编辑按钮（如果是文本消息）
-            try:
-                if result.get('show_edit', False):
-                    # 只显示编辑按钮
-                    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-                    edit_keyboard = InlineKeyboardMarkup([[
-                        InlineKeyboardButton("✏️ 编辑", callback_data=encode_callback('edit', message_id, user_id))
-                    ]])
-                    await query.edit_message_text(result['message'], reply_markup=edit_keyboard)
-                else:
-                    # 既不能编辑也不能删除，移除所有按钮
-                    await query.edit_message_text(result['message'])
-            except Exception as e:
-                logger.warning(f"无法更新失败消息: {e}")
+            # 消息超过48小时或不存在，移除删除按钮
+            keyboard = None
+            if result.get('show_edit', False):
+                # 如果是文本消息，只显示编辑按钮
+                keyboard = build_action_keyboard(message_id, user_id, show_edit=True, show_delete=False)
+            
+            await query.edit_message_text(result['message'], reply_markup=keyboard)
         else:
-            # 其他错误，只更新文本内容，保持原有按钮不变
+            # 其他错误，只更新文本内容
             try:
                 await query.edit_message_text(result['message'])
             except Exception as e:
-                # 如果文本也没有变化，则直接结束
                 logger.warning(f"无法更新失败消息: {e}")
 
 
@@ -129,10 +126,11 @@ async def handle_cancel_edit_callback(query, bot, message_service):
     result = message_service.cancel_message_edit(query.from_user.id)
     
     if result['success']:
-        # 只有文本消息才会进入编辑状态，所以取消时仍然显示编辑按钮
+        # 只有文本消息才会进入编辑状态，所以取消时显示文本消息按钮
+        # 这里默认显示删除按钮，如果超过48小时会在删除时被移除
         await query.edit_message_text(
             result['message'],
-            reply_markup=build_action_keyboard(result['message_id'], result['user_id'], True)
+            reply_markup=build_action_keyboard(result['message_id'], result['user_id'], show_edit=True, show_delete=True)
         )
     else:
         await query.edit_message_text(result['message'])
@@ -155,8 +153,8 @@ async def handle_message_edit_execution(bot, new_message, state, message_service
                 reply_markup=build_edit_done_keyboard()
             )
     
-    # 发送编辑结果的确认消息
+    # 发送编辑结果的确认消息，文本消息显示编辑和删除按钮
     await new_message.reply_text(
         result['message'],
-        reply_markup=build_action_keyboard(result['message_id'], state['user_id'], result['show_edit'])
+        reply_markup=build_action_keyboard(result['message_id'], state['user_id'], show_edit=True, show_delete=result.get('show_delete', True))
     )

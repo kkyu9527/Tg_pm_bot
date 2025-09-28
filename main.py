@@ -16,7 +16,7 @@ from controllers.webhook_controller import WebhookController
 from utils.logger import setup_logger
 
 # 全局版本号
-APP_VERSION = "1.1.0-release"
+APP_VERSION = "1.1.1-beta"
 
 # 加载环境变量
 load_dotenv()

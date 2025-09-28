@@ -173,8 +173,9 @@ class MessageService:
                         messages[0].message_id, direction, f"主人媒体组转发给{user_display}成功")
                     
                     # 主人发送媒体组后显示操作按钮（媒体组不支持编辑）
+                    # 默认显示删除按钮，如果超过48小时会在删除时被移除
                     await messages[0].reply_text(f"✅ 媒体组已转发({len(media_group)}个媒体)",
-                        reply_markup=build_action_keyboard(sent_messages[0].message_id, user_id, False))
+                        reply_markup=build_action_keyboard(sent_messages[0].message_id, user_id, show_edit=False, show_delete=True))
                         
         except Exception as e:
             logger.error(f"媒体组转发失败: {e}, 用户: {user_display}")
@@ -259,7 +260,7 @@ class MessageService:
             logger.error(f"删除消息失败: {error_msg}, 用户: {user_display}, 消息ID: {message_id}")
             
             # 针对常见错误提供友好的错误提示
-            if "Message can not be deleted for everyone" in error_msg:
+            if "Message can not be deleted for everyone" in error_msg or "Message can't be deleted for everyone" in error_msg:
                 return {'success': False, 'message': '⚠️ 消息超过48小时，无法删除', 'show_edit': True, 'remove_delete_button': True}
             elif "Message to delete not found" in error_msg:
                 return {'success': False, 'message': '⚠️ 消息不存在或已被删除', 'show_edit': True, 'remove_delete_button': True}
@@ -305,13 +306,14 @@ class MessageService:
         try:
             await bot.edit_message_text(chat_id=user_id, message_id=old_id, text=new_message.text)
             logger.info(f"文本消息编辑成功: 用户{user_display}, 消息ID{old_id}")
+            # 编辑成功后，默认显示删除按钮（新编辑的消息不会超过48小时）
             return {'success': True, 'message': '✅ 已更新用户消息', 
-                   'message_id': old_id, 'show_edit': True, 'update_original': True}
+                   'message_id': old_id, 'show_delete': True, 'update_original': True}
         except Exception as e:
             error_msg = str(e)
             logger.error(f"文本消息编辑失败: {error_msg}, 用户: {user_display}, 消息ID: {old_id}")
             return {'success': False, 'message': f'⚠️ 编辑失败：{error_msg}',
-                   'message_id': old_id, 'show_edit': True, 'update_original': True}
+                   'message_id': old_id, 'show_delete': True, 'update_original': True}
 
     # ============================= 完整流程方法 =============================
 
@@ -386,9 +388,12 @@ class MessageService:
             self._save_message_and_log(user_id, message.message_thread_id, forwarded.message_id, 
                 message.message_id, "owner_to_user", f"主人消息转发给{user_display}成功")
             
-            # 只有文本消息才显示编辑按钮
+            # 判断按钮显示逻辑
+            show_edit = bool(message.text)  # 只有文本消息才显示编辑按钮
+            show_delete = True  # 默认显示删除按钮，如果超过48小时会在删除时被移除
+            
             await message.reply_text("✅ 已转发给用户",
-                reply_markup=build_action_keyboard(forwarded.message_id, user_id, bool(message.text)))
+                reply_markup=build_action_keyboard(forwarded.message_id, user_id, show_edit=show_edit, show_delete=show_delete))
         except Exception as e:
             logger.error(f"转发失败: {e}, 用户: {user_display}")
             await message.reply_text(f"⚠️ 转发失败: {e}")
