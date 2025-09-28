@@ -335,6 +335,9 @@ class MessageService:
         user, message, bot = update.effective_user, update.effective_message, context.bot
         user_display = get_user_display_name_from_db(user.id)
         logger.info(f"收到用户 {user_display} 的消息，消息ID: {message.message_id}")
+        
+        # 处理用户消息转发
+        await self.handle_user_message_forward(message, user, bot)
 
     async def handle_owner_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理主人在群组中发送消息的完整流程"""
