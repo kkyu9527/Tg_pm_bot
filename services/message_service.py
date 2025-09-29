@@ -109,7 +109,7 @@ class MessageService:
     async def _dynamic_process_media_group(self, key: str, user_id: int, target_id: int,
                                            bot, target_chat: str, direction: str):
         """动态处理媒体组消息，根据消息ID连续性自动检测媒体组是否完整"""
-        user_display = get_user_display_name_from_db(user_id)
+        user_display = get_user_display_name_from_db(user_id,self.user_ops)
         last_count = 0
         stable_count = 0
         uploading_message = None
@@ -159,7 +159,7 @@ class MessageService:
         if not media_group:
             return
 
-        user_display = get_user_display_name_from_db(user_id)
+        user_display = get_user_display_name_from_db(user_id, self.user_ops)
 
         try:
             # 根据方向发送媒体组
@@ -191,7 +191,7 @@ class MessageService:
     async def _handle_regular_message_forward(self, message: Message, user: User, topic_id: int, bot,
                                               group_id: str) -> bool:
         """处理普通消息转发"""
-        user_display = get_user_display_name_from_db(user.id)
+        user_display = get_user_display_name_from_db(user.id, self.user_ops)
         try:
             forwarded = await self.forward_message(message, bot, group_id, topic_id)
             self._save_message_and_log(user.id, topic_id, message.message_id,
@@ -208,7 +208,7 @@ class MessageService:
 
     async def _handle_topic_not_found(self, message: Message, user: User, topic_id: int, bot, group_id: str) -> bool:
         """处理话题不存在的情况"""
-        user_display = get_user_display_name_from_db(user.id)
+        user_display = get_user_display_name_from_db(user.id, self.user_ops)
         logger.warning(f"话题{topic_id}未找到，正在为用户{user_display}重新创建")
 
         from services.topic_service import TopicService
@@ -240,7 +240,7 @@ class MessageService:
 
     async def handle_message_deletion(self, bot, user_id: int, message_id: int) -> dict:
         """处理消息删除操作（支持媒体组批量删除）"""
-        user_display = get_user_display_name_from_db(user_id)
+        user_display = get_user_display_name_from_db(user_id,self.user_ops)
 
         try:
             # 先尝试删除目标消息
@@ -282,7 +282,7 @@ class MessageService:
             "message_id": message_id, "user_id": user_id,
             "original_message": original_message, "timestamp": datetime.now(UTC)
         }
-        user_display = get_user_display_name_from_db(user_id)
+        user_display = get_user_display_name_from_db(user_id,self.user_ops)
         logger.info(f"主人开始编辑发送给用户 {user_display} 的消息 {message_id}")
         return "✏️ 请发送新的消息内容，将替换之前的消息"
 
@@ -291,7 +291,7 @@ class MessageService:
         state = self.edit_states.pop(owner_user_id, None)
 
         if state is not None:
-            user_display = get_user_display_name_from_db(state['user_id'])
+            user_display = get_user_display_name_from_db(state['user_id'],self.user_ops)
             logger.info(f"主人取消编辑发送给用户 {user_display} 的消息 {state['message_id']}")
             return {
                 'success': True,
@@ -310,7 +310,7 @@ class MessageService:
     async def execute_message_edit(self, bot, new_message, state) -> dict:
         """执行消息编辑操作（仅支持文本消息）"""
         user_id, old_id = state["user_id"], state["message_id"]
-        user_display = get_user_display_name_from_db(user_id)
+        user_display = get_user_display_name_from_db(user_id,self.user_ops)
 
         try:
             await bot.edit_message_text(chat_id=user_id, message_id=old_id, text=new_message.text)
@@ -333,7 +333,7 @@ class MessageService:
             return
 
         user, message, bot = update.effective_user, update.effective_message, context.bot
-        user_display = get_user_display_name_from_db(user.id)
+        user_display = get_user_display_name_from_db(user.id,self.user_ops)
         logger.info(f"收到用户 {user_display} 的消息，消息ID: {message.message_id}")
         
         # 处理用户消息转发
@@ -388,7 +388,7 @@ class MessageService:
 
     async def _handle_owner_message_forward(self, message, user_id: int, bot):
         """处理主人消息转发"""
-        user_display = get_user_display_name_from_db(user_id)
+        user_display = get_user_display_name_from_db(user_id, self.user_ops)
         try:
             forwarded = await self.forward_message(message, bot, user_id)
             self._save_message_and_log(user_id, message.message_thread_id, forwarded.message_id,

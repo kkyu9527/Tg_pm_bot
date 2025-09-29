@@ -2,6 +2,9 @@
 显示名称辅助函数模块
 提供统一的用户和话题显示名称格式化功能
 """
+from utils.logger import setup_logger
+
+logger = setup_logger('dsp_hlp')
 
 def get_user_display_name_from_object(user):
     """从 Telegram 用户对象获取格式化显示名称
@@ -18,7 +21,6 @@ def get_user_display_name_from_object(user):
     display_name = f"{first_name} {last_name}".strip()
     return f"{display_name}(@{username}) [ID:{user.id}]" if username else f"{display_name} [ID:{user.id}]"
 
-
 def get_user_display_name_from_db(user_id, user_ops=None):
     """从数据库获取用户的格式化显示名称
     
@@ -32,16 +34,21 @@ def get_user_display_name_from_db(user_id, user_ops=None):
     if user_ops:
         user_info = user_ops.get_user(user_id)
         if user_info:
-            first_name = user_info.get('first_name', '')
+            first_name = user_info.get('first_name', '') or ''
             last_name = user_info.get('last_name', '') or ''
-            username = user_info.get('username', '')
-            name_parts = [first_name, last_name]
-            display_name = ' '.join(filter(None, name_parts)).strip()
-            if username:
-                return f"{display_name}(@{username}) [ID:{user_id}]"
+            username = user_info.get('username', '') or ''
+
+            display_name = " ".join(filter(None, [first_name, last_name])).strip()
+            if display_name:
+                return f"{display_name}(@{username}) [ID:{user_id}]" if username else f"{display_name} [ID:{user_id}]"
             else:
-                return f"{display_name} [ID:{user_id}]"
-    return f"[ID:{user_id}]"
+                return f"(@{username}) [ID:{user_id}]" if username else f"[ID:{user_id}]"
+        else:
+            logger.warning(f"⚠️ 数据库中未找到 user_id={user_id}")
+            return f"[ID:{user_id}]"
+    else:
+        logger.warning(f"⚠️ get_user_display_name_from_db 被调用时未传 user_ops，user_id={user_id}")
+        return f"[ID:{user_id}]"
 
 
 def get_topic_display_name(topic_id, topic_ops=None):

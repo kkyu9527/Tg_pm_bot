@@ -3,6 +3,7 @@ from utils.logger import setup_logger
 from utils.display_helpers import get_user_display_name_from_object
 from typing import Dict, Optional, Any
 from contextlib import contextmanager
+from utils.display_helpers import get_user_display_name_from_db, get_topic_display_name
 import pymysql.cursors
 
 # 设置日志记录器
@@ -191,7 +192,6 @@ class MessageOperations:
                 )
                 connection.commit()
                 # 使用工具函数生成用户和话题显示名称
-                from utils.display_helpers import get_user_display_name_from_db, get_topic_display_name
                 user_display = get_user_display_name_from_db(user_id, UserOperations())
                 topic_display = get_topic_display_name(topic_id, TopicOperations())
                 logger.info(f"消息记录已保存: 用户 {user_display}, 话题 {topic_display}")

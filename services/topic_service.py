@@ -28,7 +28,7 @@ class TopicService:
         # 检查用户是否已有话题
         topic = self.topic_ops.get_user_topic(user.id)
         if topic:
-            user_display = get_user_display_name_from_db(user.id)
+            user_display = get_user_display_name_from_db(user.id, self.user_ops)
             topic_display = get_topic_display_name(topic['topic_id'], self.topic_ops)
             logger.info(f"找到用户 {user_display} 的现有话题: {topic_display}")
             return topic["topic_id"]
@@ -36,7 +36,7 @@ class TopicService:
         # 创建新话题
         topic_name = f"{user.first_name} {(user.last_name or '')}".strip() + f" (ID: {user.id})"
         username = f"@{user.username}" if user.username else "无用户名"
-        user_display = get_user_display_name_from_db(user.id)
+        user_display = get_user_display_name_from_db(user.id,self.user_ops)
         logger.info(f"为用户 {user_display} 创建新话题: {topic_name}")
         
         # 通过Telegram API创建话题
@@ -88,7 +88,7 @@ class TopicService:
             logger.info(f"消息置顶成功: 话题 {topic_display}, 消息ID {sent_msg.message_id}")
         except Exception as e:
             error_message = str(e)
-            topic_display = get_topic_display_name(topic_id)
+            topic_display = get_topic_display_name(topic_id, self.topic_ops)
             logger.warning(f"置顶失败: {error_message}, 话题: {topic_display}, 消息ID: {sent_msg.message_id}")
     
     async def handle_topic_deletion(self, bot, topic_id: int, group_id: str) -> dict:
