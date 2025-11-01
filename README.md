@@ -16,6 +16,7 @@
 * 管理员可以直接在群组话题中回复用户
 * 支持编辑和删除已发送的消息
 * 消息映射关系保存到数据库中，不保存具体内容
+* 支持通过命令获取群组 ID，方便首次配置
 
 ## 安装步骤
 
@@ -44,7 +45,7 @@ pip install -r requirements.txt
 ### 4. 获取用户 ID 和群组 ID
 
 * 用户 ID：可通过 `@userinfobot` 获取
-* 群组 ID：打开 Telegram Web 版，进入群组，查看 URL 中的数字部分，格式可能是 `-100xxxxxxxxxx`
+* 群组 ID：可通过在群组中发送 `/get_group_id` 命令获取（机器人需已在群组中）
 
 ### 5. 创建 `.env` 文件
 
@@ -86,6 +87,7 @@ python main.py
 1. 用户私聊机器人发送消息
 2. 机器人转发消息到群组话题
 3. 管理员可在群组话题中回复和管理消息
+4. 首次配置时，可在群组中发送 `/get_group_id` 命令获取群组 ID
 
 ---
 
@@ -95,6 +97,7 @@ python main.py
 * 缺少 `cryptography` 包：运行 `pip install cryptography`
 * 机器人消息不转发：确认 Bot Token、群组 ID 和机器人权限
 * Webhook 无法访问：确认服务器公网可访问，且使用 HTTPS
+* 不知道群组 ID：在群组中发送 `/get_group_id` 命令获取
 
 ---
 
