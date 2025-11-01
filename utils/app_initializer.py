@@ -14,7 +14,7 @@ from controllers.webhook_controller import WebhookController
 from utils.logger import setup_logger
 
 # 全局版本号
-APP_VERSION = "1.1.5-beta"
+APP_VERSION = "1.1.6-beta"
 
 logger = setup_logger('app_init')
 
@@ -53,11 +53,24 @@ async def setup_bot_commands(application: Application):
     Args:
         application: Telegram应用实例
     """
+    from telegram import BotCommandScopeAllPrivateChats
+    
+    # 为群组聊天设置命令（包括get_group_id命令）
     await application.bot.set_my_commands(
         commands=[
-            BotCommand("delete_topic", "删除当前话题（仅限主人）")
+            BotCommand("delete_topic", "删除当前话题（仅限主人）"),
+            BotCommand("get_group_id", "获取当前群组ID（用于配置）")
         ],
         scope=BotCommandScopeAllGroupChats()
+    )
+    
+    # 为私聊设置命令（不包括get_group_id和delete_topic命令）
+    await application.bot.set_my_commands(
+        commands=[
+            BotCommand("start", "开始使用机器人"),
+            BotCommand("info", "查看机器人信息")
+        ],
+        scope=BotCommandScopeAllPrivateChats()
     )
 
 def register_handlers(application: Application, 
@@ -74,6 +87,7 @@ def register_handlers(application: Application,
     # 注册命令处理器
     application.add_handler(CommandHandler("start", command_controller.handle_start_command))
     application.add_handler(CommandHandler("info", command_controller.handle_info_command))
+    application.add_handler(CommandHandler("get_group_id", command_controller.handle_get_group_id_command))
     application.add_handler(
         CommandHandler("delete_topic", message_controller.handle_owner_delete_topic)
     )

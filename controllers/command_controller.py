@@ -3,12 +3,13 @@
 处理Telegram命令的路由和响应
 """
 
-from telegram import Update
+from telegram import Update, Chat
 from telegram.ext import ContextTypes
 from services.user_service import UserService
 from services.topic_service import TopicService
 from utils.logger import setup_logger
 from utils.display_helpers import get_user_display_name_from_object
+import os
 
 logger = setup_logger('cmd_ctrl')
 
@@ -23,6 +24,9 @@ class CommandController:
     async def handle_start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /start 命令"""
         user = update.effective_user
+        if not user:
+            return
+            
         user_display = get_user_display_name_from_object(user)
         logger.info(f"用户 {user_display} 发送了 /start 命令")
 
@@ -31,7 +35,8 @@ class CommandController:
 
         # 生成并发送欢迎消息
         welcome_message = self.user_service.generate_welcome_message(user)
-        await update.message.reply_text(welcome_message)
+        if update.message:
+            await update.message.reply_text(welcome_message)
 
         # 创建话题 & 发送欢迎卡片到群组
         topic_id = await self.topic_service.ensure_user_topic(context.bot, user)
@@ -44,9 +49,61 @@ class CommandController:
     async def handle_info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /info 命令"""
         user = update.effective_user
+        if not user:
+            return
+            
         user_display = get_user_display_name_from_object(user)
         logger.info(f"用户 {user_display} 发送了 /info 命令")
         
         # 生成并发送信息消息
         info_message = self.user_service.generate_info_message()
-        await update.message.reply_text(info_message)
+        if update.message:
+            await update.message.reply_text(info_message)
+
+    async def handle_get_group_id_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """处理 /get_group_id 命令，用于获取当前群组的ID"""
+        # 只允许在群组中使用此命令
+        chat = update.effective_chat
+        if not chat or chat.type not in ["group", "supergroup"]:
+            if update.message:
+                await update.message.reply_text("⚠️ 此命令只能在群组中使用")
+            return
+
+        # 获取群组信息
+        group_id = chat.id
+        group_title = chat.title or "未命名群组"
+        
+        # 获取环境变量中的配置信息
+        configured_group_id = os.getenv("GROUP_ID")
+        user_id = os.getenv("USER_ID")
+        
+        # 检查是否是配置的群组
+        is_configured_group = str(group_id) == str(configured_group_id) if configured_group_id else False
+        
+        # 构建响应消息
+        response_message = (
+            f"📋 群组信息\n"
+            f"╭ 群组名称: {group_title}\n"
+            f"├ 群组ID: <code>{group_id}</code>\n"
+            f"╰ 配置状态: {'✅ 已配置' if is_configured_group else '❌ 未配置'}\n\n"
+        )
+        
+        # 如果是主人用户，提供更多配置信息
+        effective_user = update.effective_user
+        if effective_user and user_id and str(effective_user.id) == str(user_id):
+            response_message += (
+                f"🔧 配置信息\n"
+                f"╭ 配置的群组ID: <code>{configured_group_id or '未设置'}</code>\n"
+                f"╰ 你的用户ID: <code>{user_id}</code>\n\n"
+            )
+        
+        response_message += "📌 提示：将此群组ID配置到环境变量 GROUP_ID 中即可使用"
+        
+        # 记录日志
+        if effective_user:
+            user_display = get_user_display_name_from_object(effective_user)
+            logger.info(f"用户 {user_display} 在群组 '{group_title}' [{group_id}] 中请求获取群组ID")
+        
+        # 发送响应
+        if update.message:
+            await update.message.reply_text(response_message, parse_mode="HTML")
