@@ -31,19 +31,52 @@ class TopicService:
             user_display = get_user_display_name_from_db(user.id, self.user_ops)
             topic_display = get_topic_display_name(topic['topic_id'], self.topic_ops)
             logger.info(f"找到用户 {user_display} 的现有话题: {topic_display}")
-            return topic["topic_id"]
+            
+            # 检查现有话题是否在当前配置的群组中
+            current_group_id = self.GROUP_ID
+            existing_group_id = topic.get('group_id')
+            
+            # 如果群组ID不匹配或者没有群组ID记录，则需要更新话题
+            if existing_group_id != current_group_id:
+                if existing_group_id is None and current_group_id is not None:
+                    # 旧话题没有group_id，更新它而不是删除重建
+                    logger.info(f"更新用户 {user_display} 的旧话题，添加群组ID: {current_group_id}")
+                    self.topic_ops.save_topic(user.id, topic['topic_id'], topic['topic_name'], current_group_id)
+                    logger.info(f"用户 {user_display} 的话题已更新群组ID")
+                    return topic["topic_id"]
+                else:
+                    logger.info(f"检测到群组切换: 旧群组 {existing_group_id} -> 新群组 {current_group_id}，为用户 {user_display} 重新创建话题")
+                    
+                    # 删除旧话题相关的所有记录
+                    try:
+                        self.topic_ops.delete_topic(topic['topic_id'])
+                        logger.info(f"已删除用户 {user_display} 的旧话题记录")
+                    except Exception as e:
+                        logger.warning(f"删除旧话题记录时出错: {e}")
+                    
+                    # 清除topic变量，以便后续创建新话题
+                    topic = None
+            else:
+                # 群组ID匹配，直接返回现有话题
+                logger.info(f"用户 {user_display} 的话题已在当前群组中，直接使用")
+                return topic["topic_id"]
+
+        # 确保GROUP_ID不为None
+        if not self.GROUP_ID:
+            logger.error("GROUP_ID未配置")
+            raise ValueError("GROUP_ID未配置")
 
         # 创建新话题
         topic_name = f"{user.first_name} {(user.last_name or '')}".strip() + f" (ID: {user.id})"
         username = f"@{user.username}" if user.username else "无用户名"
-        user_display = get_user_display_name_from_db(user.id,self.user_ops)
+        user_display = get_user_display_name_from_db(user.id, self.user_ops)
         logger.info(f"为用户 {user_display} 创建新话题: {topic_name}")
         
         # 通过Telegram API创建话题
         topic_id = (await bot.create_forum_topic(chat_id=self.GROUP_ID, name=topic_name)).message_thread_id
         
-        # 保存话题信息
-        self.topic_ops.save_topic(user.id, topic_id, topic_name)
+        # 保存话题信息，包含当前群组ID
+        self.topic_ops.save_topic(user.id, topic_id, topic_name, self.GROUP_ID)
         
         user_display = get_user_display_name_from_db(user.id, self.user_ops)
         topic_display = get_topic_display_name(topic_id, self.topic_ops)
@@ -141,17 +174,23 @@ class TopicService:
     
     async def handle_topic_deletion_flow(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理主人删除话题请求的完整流程"""
-        
         # 只处理群组消息且发送者是主人
+        if not update.effective_chat or not update.effective_user:
+            return
+            
         if update.effective_chat.type == "private" or str(update.effective_user.id) != self.USER_ID:
             return
             
         # 只处理话题消息
-        if not update.message.is_topic_message:
+        if not update.message or not update.message.is_topic_message:
             return
 
         logger.info("主人尝试删除话题")
 
+        if not update.effective_message or not self.GROUP_ID:
+            return
+            
         topic_id = update.effective_message.message_thread_id
-        result = await self.handle_topic_deletion(context.bot, topic_id, self.GROUP_ID)
-        logger.info(f"话题删除操作完成: {result['message']}")
+        if topic_id is not None:
+            result = await self.handle_topic_deletion(context.bot, topic_id, self.GROUP_ID or "")
+            logger.info(f"话题删除操作完成: {result['message']}")

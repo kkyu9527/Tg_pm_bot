@@ -82,7 +82,7 @@ class TopicOperations:
         """初始化数据库连接"""
         self.db_connector = DatabaseConnector()
 
-    def save_topic(self, user_id: int, topic_id: int, topic_name: str) -> bool:
+    def save_topic(self, user_id: int, topic_id: int, topic_name: str, group_id: Optional[str] = None) -> bool:
         """保存话题信息到数据库"""
         connection = None
         try:
@@ -91,16 +91,16 @@ class TopicOperations:
                 # 检查话题是否已存在
                 cursor.execute("SELECT id FROM topics WHERE topic_id = %s", (topic_id,))
                 if cursor.fetchone():
-                    # 更新话题信息
+                    # 更新话题信息，包括group_id
                     cursor.execute(
-                        "UPDATE topics SET user_id = %s, topic_name = %s WHERE topic_id = %s",
-                        (user_id, topic_name, topic_id)
+                        "UPDATE topics SET user_id = %s, topic_name = %s, group_id = %s WHERE topic_id = %s",
+                        (user_id, topic_name, group_id, topic_id)
                     )
                 else:
-                    # 插入新话题
+                    # 插入新话题，包含group_id
                     cursor.execute(
-                        "INSERT INTO topics (user_id, topic_id, topic_name) VALUES (%s, %s, %s)",
-                        (user_id, topic_id, topic_name)
+                        "INSERT INTO topics (user_id, topic_id, topic_name, group_id) VALUES (%s, %s, %s, %s)",
+                        (user_id, topic_id, topic_name, group_id)
                     )
                 connection.commit()
                 logger.info(f"话题 {topic_name} [话题ID:{topic_id}] 信息已保存")
