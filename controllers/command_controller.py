@@ -39,12 +39,47 @@ class CommandController:
             await update.message.reply_text(welcome_message)
 
         # 创建话题 & 发送欢迎卡片到群组
-        topic_id = await self.topic_service.ensure_user_topic(context.bot, user)
-        
-        # 获取话题信息用于日志
-        topic_info = self.topic_service.topic_ops.get_topic_by_id(topic_id)
-        topic_display = f"{topic_info['topic_name']} [话题ID:{topic_id}]" if topic_info else f"[话题ID:{topic_id}]"
-        logger.info(f"用户 {user_display} 的话题 {topic_display} 已创建或已存在")
+        try:
+            topic_id = await self.topic_service.ensure_user_topic(context.bot, user)
+            
+            # 获取话题信息用于日志
+            topic_info = self.topic_service.topic_ops.get_topic_by_id(topic_id)
+            topic_display = f"{topic_info['topic_name']} [话题ID:{topic_id}]" if topic_info else f"[话题ID:{topic_id}]"
+            logger.info(f"用户 {user_display} 的话题 {topic_display} 已创建或已存在")
+        except Exception as e:
+            error_message = str(e)
+            logger.error(f"为用户 {user_display} 创建话题时出错: {error_message}")
+            if update.message:
+                # 向用户发送简短的错误提示
+                await update.message.reply_text("⚠️ 创建话题时出错，正在联系主人")
+                
+            # 向主人发送详细的错误信息
+            try:
+                import os
+                GROUP_ID = os.getenv("GROUP_ID")
+                USER_ID = os.getenv("USER_ID")
+                if GROUP_ID and USER_ID:
+                    admin_message = (
+                        f"🚨 为用户 {user_display} 创建话题时出错\n"
+                        f"错误详情: {error_message}\n"
+                        f"用户ID: {user.id}\n"
+                        f"群组ID: {GROUP_ID}"
+                    )
+                    
+                    # 如果是权限错误，提供具体的解决建议
+                    if "Not enough rights" in error_message:
+                        admin_message += (
+                            "\n\n🔧 解决方案:\n"
+                            "请确保机器人具有以下权限：\n"
+                            "• 创建话题\n"
+                            "• 发送消息\n"
+                            "• 管理消息"
+                        )
+                    
+                    await context.bot.send_message(chat_id=GROUP_ID, text=admin_message)
+            except Exception as admin_error:
+                logger.error(f"向主人发送错误信息时出错: {admin_error}")
+            return
 
     async def handle_info_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理 /info 命令"""
