@@ -73,17 +73,35 @@ class TopicService:
         logger.info(f"为用户 {user_display} 创建新话题: {topic_name}")
         
         # 通过Telegram API创建话题
-        topic_id = (await bot.create_forum_topic(chat_id=self.GROUP_ID, name=topic_name)).message_thread_id
+        try:
+            topic_id = (await bot.create_forum_topic(chat_id=self.GROUP_ID, name=topic_name)).message_thread_id
+        except Exception as e:
+            logger.error(f"创建话题失败: {e}")
+            # 如果创建话题失败，尝试使用默认话题或返回错误
+            raise Exception(f"无法为用户 {user_display} 创建话题: {e}")
         
         # 保存话题信息，包含当前群组ID
-        self.topic_ops.save_topic(user.id, topic_id, topic_name, self.GROUP_ID)
+        try:
+            self.topic_ops.save_topic(user.id, topic_id, topic_name, self.GROUP_ID)
+        except Exception as e:
+            logger.error(f"保存话题信息失败: {e}")
+            # 如果保存失败，尝试删除刚创建的话题
+            try:
+                await bot.delete_forum_topic(chat_id=self.GROUP_ID, message_thread_id=topic_id)
+            except:
+                pass
+            raise Exception(f"无法保存话题信息: {e}")
         
         user_display = get_user_display_name_from_db(user.id, self.user_ops)
         topic_display = get_topic_display_name(topic_id, self.topic_ops)
         logger.info(f"话题创建成功: 用户 {user_display}, 话题 {topic_display}")
 
         # 发送用户信息卡片
-        await self._send_user_info_card(bot, user, topic_id, username, self.GROUP_ID)
+        try:
+            await self._send_user_info_card(bot, user, topic_id, username, self.GROUP_ID)
+        except Exception as e:
+            logger.warning(f"发送用户信息卡片失败: {e}")
+            # 不要因为发送信息卡片失败而影响整个流程
         
         return topic_id
     

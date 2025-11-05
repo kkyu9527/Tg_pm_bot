@@ -158,9 +158,9 @@ class TopicOperations:
                 # 删除与该话题相关的记录
                 cursor.execute("DELETE FROM messages WHERE topic_id = %s", (topic_id,))
                 cursor.execute("DELETE FROM topics WHERE topic_id = %s", (topic_id,))
-                cursor.execute("DELETE FROM users WHERE id = %s", (user_id,))
+                # 注意：不删除用户记录，因为用户可能还有其他话题
                 connection.commit()
-                logger.info(f"话题 {topic_id} 及其相关消息与用户数据已从数据库中删除")
+                logger.info(f"话题 {topic_id} 及其相关消息已从数据库中删除")
                 return True
         except Exception as e:
             logger.error(f"删除话题时出错: {e}")
