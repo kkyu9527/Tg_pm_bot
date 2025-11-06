@@ -64,7 +64,7 @@ class MessageService:
             logger.error(f"{success_msg}但保存失败")
         return result
 
-    async def forward_message(self, message: Message, bot, chat_id: int, thread_id: int = None) -> Message:
+    async def forward_message(self, message: Message, bot, chat_id: int, thread_id: int | None = None) -> Message:
         """转发消息到指定聊天和话题"""
         kwargs = {"chat_id": chat_id, "from_chat_id": message.chat_id, "message_id": message.message_id}
         if thread_id:
@@ -95,7 +95,7 @@ class MessageService:
         return await self._handle_regular_message_forward(message, user, topic_id, bot, self.group_id)
 
     async def _handle_media_group_message(self, message: Message, user: User, topic_id: int, bot,
-                                          group_id: str) -> bool:
+                                          group_id: str | None) -> bool:
         """处理媒体组消息"""
         key = f"{user.id}:{message.media_group_id}"
         self.media_group_cache.setdefault(key, []).append(message)
@@ -107,7 +107,7 @@ class MessageService:
         return True
 
     async def _dynamic_process_media_group(self, key: str, user_id: int, target_id: int,
-                                           bot, target_chat: str, direction: str):
+                                           bot, target_chat: str | None, direction: str):
         """动态处理媒体组消息，根据消息ID连续性自动检测媒体组是否完整"""
         user_display = get_user_display_name_from_db(user_id,self.user_ops)
         last_count = 0
@@ -153,7 +153,7 @@ class MessageService:
                 return
 
     async def _send_media_group(self, messages, user_id: int, target_id: int,
-                                bot, target_chat: str, direction: str):
+                                bot, target_chat: str | None, direction: str):
         """发送媒体组"""
         media_group = self._build_media_group(messages)
         if not media_group:
@@ -162,6 +162,10 @@ class MessageService:
         user_display = get_user_display_name_from_db(user_id, self.user_ops)
 
         try:
+            # 确保target_chat不为None
+            if not target_chat:
+                logger.error("目标聊天ID未配置")
+                return
             # 根据方向发送媒体组
             if direction == "user_to_owner":
                 sent_messages = await bot.send_media_group(
@@ -171,6 +175,10 @@ class MessageService:
                                                sent_messages[0].message_id, direction,
                                                f"用户{user_display}媒体组转发成功")
             else:  # owner_to_user
+                # 确保target_chat不为None
+                if not target_chat:
+                    logger.error("目标聊天ID未配置")
+                    return
                 sent_messages = await bot.send_media_group(chat_id=target_chat, media=media_group)
                 if sent_messages:
                     self._save_message_and_log(user_id, target_id, sent_messages[0].message_id,
@@ -189,11 +197,15 @@ class MessageService:
                 await messages[0].reply_text(f"⚠️ 媒体组转发失败: {e}")
 
     async def _handle_regular_message_forward(self, message: Message, user: User, topic_id: int, bot,
-                                              group_id: str) -> bool:
+                                              group_id: str | None) -> bool:
         """处理普通消息转发"""
         user_display = get_user_display_name_from_db(user.id, self.user_ops)
         try:
-            forwarded = await self.forward_message(message, bot, group_id, topic_id)
+            # 确保group_id不为None
+            if not group_id:
+                logger.error("GROUP_ID未配置")
+                return False
+            forwarded = await self.forward_message(message, bot, int(group_id), topic_id)
             self._save_message_and_log(user.id, topic_id, message.message_id,
                                        forwarded.message_id, "user_to_owner", f"用户{user_display}消息转发成功")
             return True
@@ -206,7 +218,7 @@ class MessageService:
             logger.error(f"转发失败: {e}, 用户: {user_display}")
             return False
 
-    async def _handle_topic_not_found(self, message: Message, user: User, topic_id: int, bot, group_id: str) -> bool:
+    async def _handle_topic_not_found(self, message: Message, user: User, topic_id: int, bot, group_id: str | None) -> bool:
         """处理话题不存在的情况"""
         user_display = get_user_display_name_from_db(user.id, self.user_ops)
         logger.warning(f"话题{topic_id}未找到，正在为用户{user_display}重新创建")
@@ -215,7 +227,11 @@ class MessageService:
         new_topic_id = await TopicService().ensure_user_topic(bot, user)
 
         try:
-            forwarded = await self.forward_message(message, bot, group_id, new_topic_id)
+            # 确保group_id不为None
+            if not group_id:
+                logger.error("GROUP_ID未配置")
+                return False
+            forwarded = await self.forward_message(message, bot, int(group_id), new_topic_id)
             self._save_message_and_log(user.id, new_topic_id, message.message_id,
                                        forwarded.message_id, "user_to_owner", f"用户{user_display}消息转发到新话题成功")
             return True
@@ -329,7 +345,10 @@ class MessageService:
     async def handle_user_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理用户发送消息的完整流程"""
         # 只处理私聊消息且发送者不是主人
-        if update.effective_chat.type != "private" or str(update.effective_user.id) == self.owner_user_id:
+        if not update.effective_chat or not update.effective_user or not update.effective_message:
+            return
+            
+        if update.effective_chat.type != "private" or str(update.effective_user.id) == str(self.owner_user_id):
             return
 
         user, message, bot = update.effective_user, update.effective_message, context.bot
@@ -344,9 +363,26 @@ class MessageService:
         self.cleanup_edit_states()
 
         # 只处理群组消息且发送者是主人
-        if update.effective_chat.type == "private" or str(update.effective_user.id) != self.owner_user_id:
+        if not update.effective_chat or not update.effective_user:
+            return
+            
+        # 检查是否为匿名发送
+        if update.effective_user.id == 1087968824:  # Telegram 匿名管理员的默认ID
+            # 匿名发送，无法确认是否为主人
+            logger.info("检测到匿名发送消息，无法确认发送者身份")
+            if update.effective_message:
+                await update.effective_message.reply_text("⚠️ 检测到匿名发送消息，无法确认发送者身份。请关闭匿名模式或确保你的用户ID已正确配置为主人。")
             return
 
+        if update.effective_chat.type == "private" or str(update.effective_user.id) != str(self.owner_user_id):
+            # 如果不是主人发送的消息，记录日志但不提示，避免对普通用户造成干扰
+            user_display = get_user_display_name_from_db(update.effective_user.id, self.user_ops) if update.effective_user else "未知用户"
+            logger.info(f"非主人用户 {user_display} 在群组中发送消息，已忽略")
+            return
+
+        if not update.effective_message:
+            return
+            
         message = update.effective_message
         logger.info(f"收到主人的消息，消息ID: {message.message_id}")
 
@@ -362,6 +398,11 @@ class MessageService:
             return
 
         # 查找话题对应的用户
+        if message.message_thread_id is None:
+            logger.warning("消息没有话题ID")
+            await message.reply_text("⚠️ 无法确定话题ID")
+            return
+            
         topic = self.topic_ops.get_topic_by_id(message.message_thread_id)
         if not topic:
             logger.warning(f"无法找到话题 {message.message_thread_id} 对应的用户")
@@ -383,8 +424,9 @@ class MessageService:
 
         # 第一条消息时启动动态检测
         if len(self.media_group_cache[key]) == 1:
-            asyncio.create_task(self._dynamic_process_media_group(
-                key, user_id, message.message_thread_id, bot, str(user_id), "owner_to_user"))
+            if message.message_thread_id is not None:
+                asyncio.create_task(self._dynamic_process_media_group(
+                    key, user_id, message.message_thread_id, bot, str(user_id), "owner_to_user"))
 
     async def _handle_owner_message_forward(self, message, user_id: int, bot):
         """处理主人消息转发"""
@@ -395,7 +437,8 @@ class MessageService:
                                        message.message_id, "owner_to_user", f"主人消息转发给{user_display}成功")
 
             # 判断按钮显示逻辑
-            show_edit = bool(message.text)  # 只有文本消息才显示编辑按钮
+            # 只有文本消息才显示编辑按钮
+            show_edit = message.text is not None and message.text.strip() != ""
             show_delete = True  # 默认显示删除按钮，如果超过48小时会在删除时被移除
 
             await message.reply_text("✅ 已转发给用户",
@@ -408,9 +451,15 @@ class MessageService:
     async def handle_button_callback(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """处理按钮回调的完整流程"""
         self.cleanup_edit_states()
+        if not update.callback_query:
+            return
+            
         query = update.callback_query
         await query.answer()
 
+        if not query.data:
+            return
+            
         try:
             data = decode_callback(query.data)
             logger.info(f"收到按钮回调: {data['action']}, 消息ID: {data['message_id']}, 用户ID: {data['user_id']}")

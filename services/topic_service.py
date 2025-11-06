@@ -22,7 +22,6 @@ class TopicService:
         self.USER_ID = os.getenv("USER_ID")
         self.GROUP_ID = os.getenv("GROUP_ID")
     
-
     async def ensure_user_topic(self, bot, user: User) -> int:
         """确保用户有对应的话题，如果没有则创建新话题"""
         # 检查用户是否已有话题
