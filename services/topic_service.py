@@ -6,6 +6,7 @@
 import os
 from telegram import User, Update
 from telegram.ext import ContextTypes
+from telegram.error import BadRequest
 from database.db_operations import TopicOperations, UserOperations
 from utils.logger import setup_logger
 from utils.display_helpers import get_user_display_name_from_db, get_topic_display_name
@@ -56,9 +57,31 @@ class TopicService:
                     # 清除topic变量，以便后续创建新话题
                     topic = None
             else:
-                # 群组ID匹配，直接返回现有话题
-                logger.info(f"用户 {user_display} 的话题已在当前群组中，直接使用")
-                return topic["topic_id"]
+                # 群组ID匹配，检查话题是否在Telegram中实际存在
+                try:
+                    # 尝试获取话题信息来验证话题是否存在
+                    await bot.get_forum_topic(chat_id=self.GROUP_ID, message_thread_id=topic["topic_id"])
+                    logger.info(f"用户 {user_display} 的话题已在当前群组中，直接使用")
+                    return topic["topic_id"]
+                except BadRequest as e:
+                    if "message thread not found" in str(e).lower() or "not enough rights" in str(e).lower():
+                        logger.warning(f"用户 {user_display} 的话题在Telegram中不存在或无权限访问，将重新创建")
+                        # 删除数据库中的旧话题记录
+                        try:
+                            self.topic_ops.delete_topic(topic['topic_id'])
+                            logger.info(f"已删除用户 {user_display} 的旧话题记录")
+                        except Exception as delete_error:
+                            logger.warning(f"删除旧话题记录时出错: {delete_error}")
+                        # 清除topic变量，以便后续创建新话题
+                        topic = None
+                    else:
+                        # 其他错误，重新抛出
+                        raise
+                except Exception as e:
+                    logger.error(f"检查话题存在性时出错: {e}")
+                    # 如果检查失败，仍然尝试使用现有话题，避免不必要的重新创建
+                    logger.info(f"用户 {user_display} 的话题将直接使用（检查失败时的保守策略）")
+                    return topic["topic_id"]
 
         # 确保GROUP_ID不为None
         if not self.GROUP_ID:

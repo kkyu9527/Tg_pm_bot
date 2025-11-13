@@ -5,6 +5,7 @@
 
 from telegram import Update, Chat
 from telegram.ext import ContextTypes
+from telegram.error import BadRequest
 from services.user_service import UserService
 from services.topic_service import TopicService
 from utils.logger import setup_logger
@@ -73,7 +74,8 @@ class CommandController:
                             "请确保机器人具有以下权限：\n"
                             "• 创建话题\n"
                             "• 发送消息\n"
-                            "• 管理消息"
+                            "• 管理消息\n\n"
+                            "💡 提示：如果话题在Telegram中已被手动删除，请尝试重新添加机器人到群组或检查权限设置"
                         )
                     
                     await context.bot.send_message(chat_id=GROUP_ID, text=admin_message)
@@ -142,3 +144,90 @@ class CommandController:
         # 发送响应
         if update.message:
             await update.message.reply_text(response_message, parse_mode="HTML")
+    
+    async def handle_cleanup_topics_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """处理 /cleanup_topics 命令，用于清理孤立的话题记录"""
+        # 只允许主人使用此命令
+        effective_user = update.effective_user
+        user_id = os.getenv("USER_ID")
+        
+        if not effective_user or not user_id or str(effective_user.id) != str(user_id):
+            if update.message:
+                await update.message.reply_text("⚠️ 此命令仅限主人使用")
+            return
+            
+        # 只允许在群组中使用此命令
+        chat = update.effective_chat
+        if not chat or chat.type not in ["group", "supergroup"]:
+            if update.message:
+                await update.message.reply_text("⚠️ 此命令只能在群组中使用")
+            return
+            
+        group_id = os.getenv("GROUP_ID")
+        if not group_id:
+            if update.message:
+                await update.message.reply_text("⚠️ GROUP_ID 未配置")
+            return
+            
+        processing_message = None
+        if update.message:
+            processing_message = await update.message.reply_text("🔍 正在检查并清理孤立话题记录...")
+            
+        try:
+            # 获取所有话题记录
+            all_topics = []
+            connection = self.topic_service.topic_ops.db_connector.get_connection()
+            try:
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT topic_id, user_id, topic_name FROM topics")
+                    all_topics = cursor.fetchall()
+            finally:
+                connection.close()
+                
+            if not all_topics:
+                if processing_message:
+                    await processing_message.edit_text("✅ 没有发现任何话题记录")
+                return
+                
+            deleted_count = 0
+            error_count = 0
+            
+            # 检查每个话题是否在Telegram中实际存在
+            for topic_record in all_topics:
+                topic_id, user_id, topic_name = topic_record
+                try:
+                    # 尝试获取话题信息来验证话题是否存在
+                    # 使用 edit_forum_topic 方法来检查话题是否存在，如果话题不存在会抛出异常
+                    await context.bot.edit_forum_topic(chat_id=int(group_id), message_thread_id=topic_id, name=topic_name)
+                except BadRequest as e:
+                    if "message thread not found" in str(e).lower() or "not enough rights" in str(e).lower():
+                        # 话题不存在或无权限，删除数据库记录
+                        try:
+                            self.topic_service.topic_ops.delete_topic(topic_id)
+                            logger.info(f"已清理孤立话题记录: {topic_name} [话题ID:{topic_id}]")
+                            deleted_count += 1
+                        except Exception as delete_error:
+                            logger.error(f"删除孤立话题记录时出错: {delete_error}")
+                            error_count += 1
+                    else:
+                        # 其他错误，可能是权限问题但话题存在
+                        pass
+                except Exception as e:
+                    # 其他异常
+                    logger.error(f"检查话题 {topic_name} [话题ID:{topic_id}] 存在性时出错: {e}")
+                    error_count += 1
+                    
+            # 发送结果报告
+            result_message = f"✅ 话题清理完成\n\n"
+            result_message += f"🧹 清理记录数: {deleted_count}\n"
+            if error_count > 0:
+                result_message += f"⚠️ 错误数量: {error_count}\n"
+            result_message += f"📊 总检查数: {len(all_topics)}"
+            
+            if processing_message:
+                await processing_message.edit_text(result_message)
+                
+        except Exception as e:
+            logger.error(f"清理话题记录时出错: {e}")
+            if processing_message:
+                await processing_message.edit_text(f"⚠️ 清理话题记录时出错: {e}")

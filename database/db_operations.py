@@ -147,7 +147,7 @@ class TopicOperations:
         try:
             connection = self.db_connector.get_connection()
             with connection.cursor() as cursor:
-                # 获取该话题的用户ID
+                # 获取该话题的用户ID（用于日志）
                 cursor.execute("SELECT user_id FROM topics WHERE topic_id = %s", (topic_id,))
                 result = cursor.fetchone()
                 if not result:

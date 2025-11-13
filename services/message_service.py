@@ -222,6 +222,13 @@ class MessageService:
         """处理话题不存在的情况"""
         user_display = get_user_display_name_from_db(user.id, self.user_ops)
         logger.warning(f"话题{topic_id}未找到，正在为用户{user_display}重新创建")
+        
+        # 删除数据库中已不存在的话题记录
+        try:
+            self.topic_ops.delete_topic(topic_id)
+            logger.info(f"已删除用户 {user_display} 的旧话题记录 {topic_id}")
+        except Exception as e:
+            logger.warning(f"删除旧话题记录时出错: {e}")
 
         from services.topic_service import TopicService
         new_topic_id = await TopicService().ensure_user_topic(bot, user)

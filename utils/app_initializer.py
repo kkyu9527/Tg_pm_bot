@@ -14,7 +14,7 @@ from controllers.webhook_controller import WebhookController
 from utils.logger import setup_logger
 
 # 全局版本号
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.1-beta"
 
 logger = setup_logger('app_init')
 
@@ -59,7 +59,8 @@ async def setup_bot_commands(application: Application):
     await application.bot.set_my_commands(
         commands=[
             BotCommand("delete_topic", "删除当前话题（仅限主人）"),
-            BotCommand("get_group_id", "获取当前群组ID（用于配置）")
+            BotCommand("get_group_id", "获取当前群组ID（用于配置）"),
+            BotCommand("cleanup_topics", "清理孤立话题记录（仅限主人）")
         ],
         scope=BotCommandScopeAllGroupChats()
     )
@@ -88,6 +89,7 @@ def register_handlers(application: Application,
     application.add_handler(CommandHandler("start", command_controller.handle_start_command))
     application.add_handler(CommandHandler("info", command_controller.handle_info_command))
     application.add_handler(CommandHandler("get_group_id", command_controller.handle_get_group_id_command))
+    application.add_handler(CommandHandler("cleanup_topics", command_controller.handle_cleanup_topics_command))
     application.add_handler(CommandHandler("delete_topic", message_controller.handle_owner_delete_topic))
     
     # 注册消息处理器
