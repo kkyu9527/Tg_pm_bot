@@ -196,11 +196,12 @@ class CommandController:
             for topic_record in all_topics:
                 topic_id, user_id, topic_name = topic_record
                 try:
-                    # 尝试获取话题信息来验证话题是否存在
-                    # 使用 edit_forum_topic 方法来检查话题是否存在，如果话题不存在会抛出异常
+                    # 尝试编辑话题来验证话题是否存在
+                    # 如果话题不存在，会抛出 BadRequest 异常
                     await context.bot.edit_forum_topic(chat_id=int(group_id), message_thread_id=topic_id, name=topic_name)
                 except BadRequest as e:
-                    if "message thread not found" in str(e).lower() or "not enough rights" in str(e).lower():
+                    error_message = str(e).lower()
+                    if "message thread not found" in error_message or "not enough rights" in error_message:
                         # 话题不存在或无权限，删除数据库记录
                         try:
                             self.topic_service.topic_ops.delete_topic(topic_id)

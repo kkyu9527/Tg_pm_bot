@@ -59,12 +59,14 @@ class TopicService:
             else:
                 # 群组ID匹配，检查话题是否在Telegram中实际存在
                 try:
-                    # 尝试获取话题信息来验证话题是否存在
-                    await bot.get_forum_topic(chat_id=self.GROUP_ID, message_thread_id=topic["topic_id"])
+                    # 尝试编辑话题来验证话题是否存在
+                    # 如果话题不存在，会抛出 BadRequest 异常
+                    await bot.edit_forum_topic(chat_id=self.GROUP_ID, message_thread_id=topic["topic_id"], name=topic["topic_name"])
                     logger.info(f"用户 {user_display} 的话题已在当前群组中，直接使用")
                     return topic["topic_id"]
                 except BadRequest as e:
-                    if "message thread not found" in str(e).lower() or "not enough rights" in str(e).lower():
+                    error_message = str(e).lower()
+                    if "message thread not found" in error_message or "not enough rights" in error_message:
                         logger.warning(f"用户 {user_display} 的话题在Telegram中不存在或无权限访问，将重新创建")
                         # 删除数据库中的旧话题记录
                         try:
