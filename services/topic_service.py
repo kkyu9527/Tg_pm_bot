@@ -60,7 +60,7 @@ class TopicService:
                 # 群组ID匹配，检查话题是否在Telegram中实际存在
                 try:
                     # 尝试编辑话题来验证话题是否存在
-                    # 如果话题不存在，会抛出 BadRequest 异常
+                    # 如果话题不存在，会抛出各种异常
                     await bot.edit_forum_topic(chat_id=self.GROUP_ID, message_thread_id=topic["topic_id"], name=topic["topic_name"])
                     logger.info(f"用户 {user_display} 的话题已在当前群组中，直接使用")
                     return topic["topic_id"]
@@ -78,7 +78,8 @@ class TopicService:
                         topic = None
                     else:
                         # 其他错误，重新抛出
-                        raise
+                        logger.warning(f"编辑话题时发生其他错误，直接使用现有话题: {e}")
+                        return topic["topic_id"]
                 except Exception as e:
                     logger.error(f"检查话题存在性时出错: {e}")
                     # 如果检查失败，仍然尝试使用现有话题，避免不必要的重新创建

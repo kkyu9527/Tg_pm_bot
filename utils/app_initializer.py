@@ -14,7 +14,7 @@ from controllers.webhook_controller import WebhookController
 from utils.logger import setup_logger
 
 # 全局版本号
-APP_VERSION = "1.2.2-beta"
+APP_VERSION = "1.2.3-beta"
 
 logger = setup_logger('app_init')
 

@@ -197,7 +197,7 @@ class CommandController:
                 topic_id, user_id, topic_name = topic_record
                 try:
                     # 尝试编辑话题来验证话题是否存在
-                    # 如果话题不存在，会抛出 BadRequest 异常
+                    # 如果话题不存在，会抛出各种异常
                     await context.bot.edit_forum_topic(chat_id=int(group_id), message_thread_id=topic_id, name=topic_name)
                 except BadRequest as e:
                     error_message = str(e).lower()
@@ -212,7 +212,7 @@ class CommandController:
                             error_count += 1
                     else:
                         # 其他错误，可能是权限问题但话题存在
-                        pass
+                        logger.warning(f"检查话题 {topic_name} [话题ID:{topic_id}] 时发生其他错误，跳过清理: {e}")
                 except Exception as e:
                     # 其他异常
                     logger.error(f"检查话题 {topic_name} [话题ID:{topic_id}] 存在性时出错: {e}")
