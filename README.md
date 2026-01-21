@@ -1,6 +1,6 @@
 # Telegram 私聊转发机器人
 
-# 此项目停止维护，换Java写了，项目地址：https://github.com/kkyu9527/Tg_bot，新增许多功能
+# 此项目停止维护，换Java写了，新增许多功能。项目地址：https://github.com/kkyu9527/Tg_bot
 
 
 ⚠️ **注意**：由于本项目使用的是 Webhook 模式，**必须使用公网可访问的域名**，且建议使用 **HTTPS**。
